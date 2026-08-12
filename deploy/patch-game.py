@@ -70,8 +70,8 @@ index = Path('dist/index.html')
 html = index.read_text(encoding='utf-8')
 html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
-html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+)?', 'game.js?v=2.2.5-perf2', html)
-html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install9', html)
+html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+)?', 'game.js?v=2.2.5-headsweep1', html)
+html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install10', html)
 scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
@@ -191,7 +191,7 @@ autostart_guard = """  function autoStartInstalledGame() {
 if autostart_marker in install_text:
     install_text = install_text.replace(autostart_marker, autostart_guard, 1)
 
-install_text = re.sub(r"serviceWorker\.register\('\./sw\.js\?v=2\.2\.6-install\d+'", "serviceWorker.register('./sw.js?v=2.2.6-install9'", install_text, count=1)
+install_text = re.sub(r"serviceWorker\.register\('\./sw\.js\?v=2\.2\.6-install\d+'", "serviceWorker.register('./sw.js?v=2.2.6-install10'", install_text, count=1)
 install_gate.write_text(install_text, encoding='utf-8')
 
 manifest_path = Path('dist/manifest.webmanifest')
@@ -202,7 +202,7 @@ manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\
 sw = Path('dist/sw.js')
 if sw.exists():
     text = sw.read_text(encoding='utf-8')
-    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-render-perf-20260812-v9';", text, count=1)
+    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-head-sweep-20260812-v10';", text, count=1)
     if "'./snake2-stats.js'" not in text:
         text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
 
