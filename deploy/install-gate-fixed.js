@@ -10,6 +10,7 @@
     deferredPrompt: null,
     splashFinished: false,
     installCompleted: false,
+    installConfirmedAt: 0,
     installRequested: false,
     preparationTimer: null,
     swReady: false,
@@ -29,6 +30,11 @@
              document.referrer.startsWith('android-app://');
     } catch (_) { return false; }
   };
+
+  const hasInstallConfirmation = () =>
+    state.installCompleted === true &&
+    Number.isFinite(state.installConfirmedAt) &&
+    state.installConfirmedAt > 0;
 
   function setStatus(title, text, mode = 'waiting') {
     const titleEl = qs('installGateTitle');
@@ -78,14 +84,22 @@
   function showRefreshButton(show) {
     const button = ensureRefreshButton();
     if (!button) return;
-    button.hidden = !show;
-    button.style.display = show ? 'flex' : 'none';
-    button.disabled = false;
+
+    // Hard safety gate: this action must never become visible just because the
+    // install prompt was accepted. Only the browser's appinstalled event is proof.
+    const allowed = show === true && hasInstallConfirmation();
+    button.hidden = !allowed;
+    button.style.display = allowed ? 'flex' : 'none';
+    button.disabled = !allowed;
     const label = button.querySelector('b');
     if (label) label.textContent = 'Rafraîchir et ouvrir l’application';
   }
 
   function showInstalledAction() {
+    if (!hasInstallConfirmation()) {
+      showRefreshButton(false);
+      return;
+    }
     setStatus('Snake 2.0 est installé', 'L’installation vient d’être confirmée par ton appareil.', 'installed');
     setButton('Installation terminée', true);
     setHelp('<strong>Installation terminée ✓</strong><span>Cette confirmation provient directement de l’événement d’installation du navigateur.</span><span>Utilise le bouton séparé ci-dessous pour rafraîchir la page et tenter d’ouvrir Snake 2.0.</span>');
@@ -137,7 +151,7 @@
   }
 
   function updatePreparation() {
-    if (state.deferredPrompt || state.installCompleted || isInstalledLaunch()) {
+    if (state.deferredPrompt || hasInstallConfirmation() || isInstalledLaunch()) {
       clearInterval(state.preparationTimer);
       state.preparationTimer = null;
       refreshGate();
@@ -172,8 +186,9 @@
     if (!state.splashFinished) return;
     showGate();
 
-    // This state exists only in the current page lifetime after a real appinstalled event.
-    if (state.installCompleted) return showInstalledAction();
+    // The refresh/open action is unlocked only by a real appinstalled event in
+    // this exact page lifetime. userChoice === accepted is intentionally not enough.
+    if (hasInstallConfirmation()) return showInstalledAction();
 
     showRefreshButton(false);
     if (isIOS()) return showIOSHelp();
@@ -190,8 +205,9 @@
   }
 
   function refreshAndLaunch() {
-    // This button only exists after appinstalled fired in this page lifetime.
-    if (!state.installCompleted) {
+    // Refuse the action unless appinstalled has positively confirmed this install.
+    if (!hasInstallConfirmation()) {
+      showRefreshButton(false);
       refreshGate();
       return;
     }
@@ -247,15 +263,21 @@
 
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();
+    // If Chrome says the app is installable, no previous transient completion
+    // state may be allowed to unlock the post-install action.
+    state.installCompleted = false;
+    state.installConfirmedAt = 0;
     state.deferredPrompt = event;
     clearInterval(state.preparationTimer);
     state.preparationTimer = null;
+    showRefreshButton(false);
     refreshGate();
   });
 
   window.addEventListener('appinstalled', () => {
     // Current-page proof only. Deliberately never written to localStorage/sessionStorage.
     state.installCompleted = true;
+    state.installConfirmedAt = Date.now();
     state.deferredPrompt = null;
     clearInterval(state.preparationTimer);
     state.preparationTimer = null;
@@ -264,10 +286,11 @@
 
   window.addEventListener('DOMContentLoaded', () => {
     ensureRefreshButton();
+    showRefreshButton(false);
     const button = qs('installGateBtn');
     if (button) button.addEventListener('click', async () => {
       if (isInstalledLaunch()) return hideGate();
-      if (state.installCompleted) return;
+      if (hasInstallConfirmation()) return showInstalledAction();
       if (isIOS()) return showIOSHelp();
       if (!state.deferredPrompt) {
         if (state.installRequested && remainingPreparationSeconds() <= 0) showManualHelp();
@@ -277,21 +300,31 @@
       state.installRequested = true;
       const promptEvent = state.deferredPrompt;
       state.deferredPrompt = null;
+      showRefreshButton(false);
       setInstallButton();
       setHelp('');
       try {
         await promptEvent.prompt();
         const choice = await promptEvent.userChoice;
         if (choice?.outcome === 'accepted') {
-          setStatus('Installation en cours', 'Attends la confirmation réelle de ton appareil. Le bouton Installer restera disponible jusqu’à la confirmation finale.', 'installing');
+          // Accepted means only that the browser accepted the request. It is not
+          // installation proof; keep the refresh/open action locked.
+          setStatus('Installation en cours', 'Attends la confirmation réelle de ton appareil. Le bouton d’ouverture apparaîtra uniquement quand l’installation sera terminée.', 'installing');
+          showRefreshButton(false);
           setInstallButton();
         } else {
           state.installRequested = false;
+          state.installCompleted = false;
+          state.installConfirmedAt = 0;
           setStatus('Installation annulée', 'Tu peux relancer l’installation immédiatement.', 'cancelled');
+          showRefreshButton(false);
           setInstallButton();
         }
       } catch (error) {
         console.debug('[Snake2 install] prompt error', error?.message || error);
+        state.installCompleted = false;
+        state.installConfirmedAt = 0;
+        showRefreshButton(false);
         showManualHelp();
       }
     });
@@ -312,6 +345,7 @@
   window.__SNAKE_INSTALL_GATE__ = {
     afterSplash() { state.splashFinished = true; refreshGate(); },
     refresh: refreshGate,
-    isInstalledLaunch
+    isInstalledLaunch,
+    hasInstallConfirmation
   };
 })();
