@@ -1,5 +1,5 @@
 from pathlib import Path
-import re
+import re, json
 
 game = Path('dist/game.js')
 js = game.read_text(encoding='utf-8')
@@ -75,16 +75,21 @@ html = index.read_text(encoding='utf-8')
 html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
 html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+)?', 'game.js?v=2.2.5-perf1', html)
-html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install1', html)
+html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install2', html)
 scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
 index.write_text(html, encoding='utf-8')
 
+manifest_path = Path('dist/manifest.webmanifest')
+manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+manifest['launch_handler'] = {'client_mode': ['navigate-existing', 'auto']}
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
 sw = Path('dist/sw.js')
 if sw.exists():
     text = sw.read_text(encoding='utf-8')
-    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.5[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-fix-20260812';", text, count=1)
+    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-open-20260812';", text, count=1)
     if "'./snake2-stats.js'" not in text:
         text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
     sw.write_text(text, encoding='utf-8')
