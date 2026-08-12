@@ -42,6 +42,7 @@ jobs:
           cp deploy/snake2-stats.js dist/snake2-stats.js
           cp deploy/install-gate-fixed.js dist/install-gate-v225.js
           python3 deploy/patch-game.py
+          python3 deploy/patch-head-sway.py
 
           # The installed app must always land on its home screen.
           # Remove the post-install autostart parameter and neutralize the old
@@ -82,6 +83,13 @@ jobs:
           grep -q 'bodySpineGradient' dist/game.js
           grep -q 'points.length > 18 ? 2' dist/game.js
           grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackGameStart'
+
+          # Realistic head sway checks: visual only, no gameplay/hitbox changes.
+          grep -q 'const headSwayPhase = time \* 0.0185' dist/game.js
+          grep -q 'const visualHeadX = head.x + swayNormalX \* headSwayPx' dist/game.js
+          grep -q 'const visualHeadY = head.y + swayNormalY \* headSwayPx' dist/game.js
+          grep -q 'headImg, visualHeadX, visualHeadY, headAngle' dist/game.js
+          grep -q 'ctx.translate(visualHeadX, visualHeadY)' dist/game.js
 
           # Installation confirmation and persistence checks
           grep -q "window.addEventListener('appinstalled'" dist/install-gate-v225.js
