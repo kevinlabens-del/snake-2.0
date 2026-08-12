@@ -4,7 +4,6 @@ import re, json
 game = Path('dist/game.js')
 js = game.read_text(encoding='utf-8')
 
-# Public stats: count only a successfully completed level.
 js = js.replace("    save.gamesPlayed++;\n    window.snake2TrackGameStart?.();", "    save.gamesPlayed++;")
 needle = "    state.levelComplete = true; state.running = false;\n    recordMissionOutcome(true, snapshot);"
 hook = "    state.levelComplete = true; state.running = false;\n    window.snake2TrackGameStart?.();\n    recordMissionOutcome(true, snapshot);"
@@ -13,7 +12,6 @@ if 'state.levelComplete = true; state.running = false;\n    window.snake2TrackGa
         raise SystemExit('completeLevel hook point missing')
     js = js.replace(needle, hook, 1)
 
-# Fixed-timestep catch-up: gameplay speed stays stable when rendering FPS drops.
 old_loop = """      state.acc += dt * 1000;
       const dynamicStep = missionDynamicStep();
       state.visualStepMs = dynamicStep;
@@ -37,13 +35,11 @@ if old_loop not in js:
     raise SystemExit('game loop point missing')
 js = js.replace(old_loop, new_loop, 1)
 
-# Keep the continuous body, but reduce expensive warped-sprite density on long snakes.
 old_stride = "const detailStride = points.length > 120 ? 3 : points.length > 58 ? 2 : 1;"
 if old_stride not in js:
     raise SystemExit('body detail stride point missing')
 js = js.replace(old_stride, "const detailStride = points.length > 72 ? 4 : points.length > 36 ? 3 : points.length > 18 ? 2 : 1;", 1)
 
-# Avoid allocating the same body gradient on every animation frame.
 if "  let bodySpineGradient = null;" not in js:
     marker = "  const wavePointBuffer = [];"
     if marker not in js:
@@ -75,7 +71,7 @@ html = index.read_text(encoding='utf-8')
 html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
 html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+)?', 'game.js?v=2.2.5-perf1', html)
-html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install3', html)
+html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install4', html)
 scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
@@ -89,7 +85,7 @@ manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\
 sw = Path('dist/sw.js')
 if sw.exists():
     text = sw.read_text(encoding='utf-8')
-    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-open-20260812-v3';", text, count=1)
+    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-stable-20260812-v4';", text, count=1)
     if "'./snake2-stats.js'" not in text:
         text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
 
@@ -120,7 +116,8 @@ async function networkFirstCritical(request) {
       ? navigationFastStart(request)
       : (isAudio ? audioResponse(request) : (isInstallGate ? networkFirstCritical(request) : staleWhileRevalidate(request)))
   );"""
-    if old_respond not in text:
+    if old_respond in text:
+        text = text.replace(old_respond, new_respond, 1)
+    elif 'isInstallGate' not in text:
         raise SystemExit('service worker fetch routing point missing')
-    text = text.replace(old_respond, new_respond, 1)
     sw.write_text(text, encoding='utf-8')
