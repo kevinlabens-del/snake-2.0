@@ -70,13 +70,16 @@ jobs:
           grep -q 'bodySpineGradient' dist/game.js
           grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackGameStart'
 
-          # Slow realistic head sweep: ~1.25 s from one extreme to the other.
+          # Natural visual head sweep: ~1.25 s from one extreme to the other,
+          # limited amplitude so the sprite stays visually connected to the neck.
           grep -q 'const headSweepPhase = time \* 0.0025132741' dist/game.js
-          grep -q 'const headSweepPx = cell \* 0.62 \* headSweep' dist/game.js
-          grep -q 'const headAngle = baseHeadAngle + headSweep \* 0.52' dist/game.js
-          grep -q 'const forwardArcPx = cell \* 0.10 \* (1 - Math.abs(headSweep))' dist/game.js
+          grep -q 'const headSweep = Math.sin(headSweepPhase)' dist/game.js
+          grep -q 'const headSweepPx = cell \* 0.22 \* headSweep' dist/game.js
+          grep -q 'const headAngle = baseHeadAngle + headSweep \* 0.30' dist/game.js
           grep -q 'headImg, visualHeadX, visualHeadY, headAngle' dist/game.js
           grep -q 'ctx.translate(visualHeadX, visualHeadY)' dist/game.js
+          ! grep -q 'const forwardArcPx = cell \* 0.10' dist/game.js
+          ! grep -q 'const headSweepPx = cell \* 0.62' dist/game.js
 
           # Preserve previous render-performance protections.
           grep -q 'Math.ceil(Math.max(1, points.length - 2) / 13)' dist/game.js
@@ -95,11 +98,11 @@ jobs:
           ! grep -q "launchUrl.searchParams.set('autostart', '1')" dist/install-gate-v225.js
           ! grep -q 'play.click()' dist/install-gate-v225.js
 
-          # Force installed devices to receive the slower animation.
+          # Force installed devices to receive the corrected animation.
           grep -q "serviceWorker.register('./sw.js?v=2.2.6-install11'" dist/install-gate-v225.js
           grep -q 'install-gate-v225.js?v=2.2.6-install11' dist/index.html
-          grep -q 'game.js?v=2.2.5-headsweep2' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-head-sweep-slow-20260812-v11' dist/sw.js
+          grep -q 'game.js?v=2.2.5-headsweep3' dist/index.html
+          grep -q 'snake-2.0-v2.2.6-head-sweep-natural-20260813-v12' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isInstallGate' dist/sw.js
