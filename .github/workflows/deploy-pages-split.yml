@@ -32,6 +32,7 @@ jobs:
           unzip -q Snake-2.0-V2.2.5-SPCK.zip -d dist
           test -f dist/index.html
           test -f dist/game.js
+          test -f dist/apple-snake-levels.js
           test -f dist/manifest.webmanifest
           test -f dist/sw.js
 
@@ -43,6 +44,7 @@ jobs:
           cp deploy/install-gate-fixed.js dist/install-gate-v225.js
           python3 deploy/patch-game.py
           python3 deploy/patch-head-sway.py
+          python3 deploy/patch-missed-apples.py
 
           python3 - <<'PY'
           from pathlib import Path
@@ -70,8 +72,15 @@ jobs:
           grep -q 'bodySpineGradient' dist/game.js
           grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackGameStart'
 
-          # Natural visual head sweep: ~1.25 s from one extreme to the other,
-          # limited amplitude so the sprite stays visually connected to the neck.
+          # Timed accuracy missions now consume lives instead of ending while lives remain.
+          grep -q "const timedAccuracy = state.mission?.missionType === 'accuracy'" dist/game.js
+          grep -q "levelEngine?.record('lifeLost', { amount: 1 })" dist/game.js
+          grep -q 'Pomme manquée' dist/game.js
+          grep -q "mission.missionType === 'accuracy'" dist/apple-snake-levels.js
+          grep -q 'const allowedMisses = Math.max(0' dist/apple-snake-levels.js
+          grep -q 'pomme.*manquée.*max' dist/apple-snake-levels.js
+
+          # Natural visual head sweep remains independent from gameplay logic.
           grep -q 'const headSweepPhase = time \* 0.0025132741' dist/game.js
           grep -q 'const headSweep = Math.sin(headSweepPhase)' dist/game.js
           grep -q 'const headSweepPx = cell \* 0.22 \* headSweep' dist/game.js
@@ -98,11 +107,12 @@ jobs:
           ! grep -q "launchUrl.searchParams.set('autostart', '1')" dist/install-gate-v225.js
           ! grep -q 'play.click()' dist/install-gate-v225.js
 
-          # Force installed devices to receive the corrected animation.
+          # Force installed devices and browsers to receive corrected gameplay logic.
           grep -q "serviceWorker.register('./sw.js?v=2.2.6-install11'" dist/install-gate-v225.js
           grep -q 'install-gate-v225.js?v=2.2.6-install11' dist/index.html
-          grep -q 'game.js?v=2.2.5-headsweep3' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-head-sweep-natural-20260813-v12' dist/sw.js
+          grep -q 'game.js?v=2.2.5-missedlife1' dist/index.html
+          grep -q 'apple-snake-levels.js?v=2.2.5-missedlife1' dist/index.html
+          grep -q 'snake-2.0-v2.2.6-missed-life-20260813-v13' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isInstallGate' dist/sw.js
@@ -111,6 +121,14 @@ jobs:
           node --check dist/install-gate-v225.js
           node --check dist/sw.js
           node --check dist/game.js
+          node --check dist/apple-snake-levels.js
+          node - <<'NODE'
+          const Levels = require('./dist/apple-snake-levels.js');
+          const mission = Levels.getMission(15, {}, { adaptive: true });
+          const missFail = mission.failConditions.find(c => c.metric === 'apples.missed');
+          if (!missFail || Number(missFail.value) < 1) throw new Error('Level 15 still fails on the first missed apple');
+          if (!String(mission.description).includes('manquée')) throw new Error('Accuracy rule is not visible in mission description');
+          NODE
           grep -q 'snake2-stats.js?v=20260812h' dist/index.html
           grep -q 'snake2-public-stats' dist/snake2-stats.js
           touch dist/.nojekyll
