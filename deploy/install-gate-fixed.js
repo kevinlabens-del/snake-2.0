@@ -1,18 +1,16 @@
 'use strict';
 (() => {
-  const INSTALL_CONFIRMED_KEY = 'snake2_install_confirmed_v2';
-  const SW_RELOAD_KEY = 'snake2_sw_reload_once_v2';
+  const INSTALL_CONFIRMED_KEY = 'snake2_install_confirmed_v3';
+  const OPEN_AFTER_REFRESH_KEY = 'snake2_open_after_refresh_v3';
   const state = {
     deferredPrompt: null,
     splashFinished: false,
-    installCompleted: localStorage.getItem(INSTALL_CONFIRMED_KEY) === '1' || new URLSearchParams(location.search).get('installed') === '1',
+    installCompleted: localStorage.getItem(INSTALL_CONFIRMED_KEY) === '1',
     installRequested: false,
     preparationTimer: null,
     swReady: false,
     startedAt: performance.now()
   };
-
-  if (state.installCompleted) localStorage.setItem(INSTALL_CONFIRMED_KEY, '1');
 
   const INSTALL_READY_DELAY_MS = 32000;
   const qs = id => document.getElementById(id);
@@ -53,19 +51,46 @@
     if (html) help.innerHTML = html;
   }
 
+  function ensureRefreshButton() {
+    let button = qs('installRefreshBtn');
+    if (button) return button;
+    const primary = qs('installGateBtn');
+    if (!primary || !primary.parentNode) return null;
+    button = document.createElement('button');
+    button.id = 'installRefreshBtn';
+    button.type = 'button';
+    button.hidden = true;
+    button.innerHTML = '<span aria-hidden="true">↻</span><b>Rafraîchir et ouvrir l’application</b>';
+    button.style.cssText = 'width:100%;margin-top:14px;min-height:58px;border:1px solid rgba(120,255,105,.55);border-radius:20px;background:rgba(21,54,20,.86);color:#efffe9;font:inherit;font-weight:800;display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 18px;box-shadow:0 0 18px rgba(80,255,80,.12);';
+    primary.insertAdjacentElement('afterend', button);
+    button.addEventListener('click', refreshThenOpen);
+    return button;
+  }
+
+  function showRefreshButton(show) {
+    const button = ensureRefreshButton();
+    if (!button) return;
+    button.hidden = !show;
+    button.style.display = show ? 'flex' : 'none';
+    button.disabled = false;
+  }
+
   function showInstalledAction() {
-    setStatus('Snake 2.0 est installé', 'Installation terminée. Appuie ci-dessous pour ouvrir le jeu dans l’application.', 'installed');
-    setButton('▶ Ouvrir Snake 2.0', false);
-    setHelp('<strong>Installation terminée ✓</strong><span>Snake 2.0 est maintenant installé sur cet appareil.</span><span>Appuie sur « Ouvrir Snake 2.0 ». Si Android ne bascule pas automatiquement dans l’application, ouvre son icône depuis l’écran d’accueil.</span>');
+    setStatus('Snake 2.0 est installé', 'L’installation est terminée. Rafraîchis la page puis ouvre le jeu dans l’application.', 'installed');
+    setButton('Installation terminée', true);
+    setHelp('<strong>Installation terminée ✓</strong><span>Le bouton Installer reste validé. Utilise le bouton séparé ci-dessous pour rafraîchir cette page et tenter l’ouverture de Snake 2.0 dans l’application installée.</span><span>Si Android ne bascule pas automatiquement, ouvre simplement l’icône Snake 2.0 sur l’écran d’accueil.</span>');
+    showRefreshButton(true);
   }
 
   function showIOSHelp() {
+    showRefreshButton(false);
     setStatus('Installer Snake 2.0', 'Sur iPhone et iPad, l’installation se fait depuis le menu Partager de Safari.', 'ios');
     setButton('Voir les étapes iPhone', false);
     setHelp('<strong>Installation sur iPhone / iPad</strong><span>1. Ouvre cette page dans Safari.</span><span>2. Appuie sur Partager ⤴︎.</span><span>3. Choisis « Sur l’écran d’accueil » puis « Ajouter ».</span><span>4. Lance Snake 2.0 depuis sa nouvelle icône.</span>');
   }
 
   function showManualHelp() {
+    showRefreshButton(false);
     const device = isAndroid()
       ? '<span>Android : menu ⋮ → « Installer l’application » ou « Ajouter à l’écran d’accueil ».</span>'
       : '<span>Menu du navigateur → « Installer l’application » ou « Ajouter à l’écran d’accueil ».</span>';
@@ -110,6 +135,7 @@
     }
     const remaining = remainingPreparationSeconds();
     if (remaining > 0) {
+      showRefreshButton(false);
       setStatus('Préparation de l’installation', `Chrome prépare l’installation${state.swReady ? '' : ' · vérification de l’application'}. Reste sur cette page encore ${remaining} s environ.`, 'preparing');
       setButton(`Préparation… ${remaining} s`, true);
     } else {
@@ -121,6 +147,7 @@
 
   function beginPreparation() {
     state.installRequested = true;
+    showRefreshButton(false);
     setHelp('');
     updatePreparation();
     if (!state.preparationTimer && !state.deferredPrompt) state.preparationTimer = setInterval(updatePreparation, 1000);
@@ -134,6 +161,7 @@
     if (!state.splashFinished) return;
     showGate();
     if (state.installCompleted) return showInstalledAction();
+    showRefreshButton(false);
     if (isIOS()) return showIOSHelp();
     if (state.deferredPrompt) {
       setHelp('');
@@ -147,39 +175,38 @@
     setHelp('<strong>Pourquoi une préparation ?</strong><span>Le navigateur doit d’abord vérifier l’application avant d’autoriser son installation.</span>');
   }
 
-  function hardRefreshAfterInstall() {
+  function refreshThenOpen() {
+    sessionStorage.setItem(OPEN_AFTER_REFRESH_KEY, '1');
+    const button = ensureRefreshButton();
+    if (button) {
+      button.disabled = true;
+      button.querySelector('b').textContent = 'Rafraîchissement…';
+    }
     const url = new URL(location.href);
-    url.searchParams.set('installed', '1');
     url.searchParams.set('refresh', String(Date.now()));
     location.replace(url.href);
   }
 
-  function openInstalledApp() {
-    setButton('Ouverture…', true);
-    setStatus('Ouverture de Snake 2.0', 'Tentative d’ouverture de l’application installée…', 'opening');
-    const url = new URL('./', location.href);
-    url.searchParams.set('source', 'installed-open');
-    url.searchParams.set('t', String(Date.now()));
-    const link = document.createElement('a');
-    link.href = url.href;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
+  function attemptOpenAfterRefresh() {
+    if (sessionStorage.getItem(OPEN_AFTER_REFRESH_KEY) !== '1') return;
+    sessionStorage.removeItem(OPEN_AFTER_REFRESH_KEY);
+    if (isInstalledLaunch()) return;
     setTimeout(() => {
-      link.remove();
-      showInstalledAction();
-    }, 1200);
+      const url = new URL('./', location.href);
+      url.search = '';
+      const link = document.createElement('a');
+      link.href = url.href;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => link.remove(), 1200);
+    }, 500);
   }
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (sessionStorage.getItem(SW_RELOAD_KEY) === '1') return;
-      sessionStorage.setItem(SW_RELOAD_KEY, '1');
-      location.reload();
-    });
-    navigator.serviceWorker.register('./sw.js?v=2.2.6-install3', { updateViaCache: 'none' })
+    navigator.serviceWorker.register('./sw.js?v=2.2.6-install4', { updateViaCache: 'none' })
       .then(reg => reg.update().then(() => navigator.serviceWorker.ready))
       .then(() => { state.swReady = true; refreshGate(); })
       .catch(error => { console.debug('[Snake2 install] service worker unavailable', error?.message || error); refreshGate(); });
@@ -198,16 +225,14 @@
     state.deferredPrompt = null;
     localStorage.setItem(INSTALL_CONFIRMED_KEY, '1');
     showInstalledAction();
-    setStatus('Installation terminée ✓', 'Actualisation automatique pour finaliser l’installation…', 'installed');
-    setButton('Actualisation…', true);
-    setTimeout(hardRefreshAfterInstall, 900);
   });
 
   window.addEventListener('DOMContentLoaded', () => {
+    ensureRefreshButton();
     const button = qs('installGateBtn');
     if (button) button.addEventListener('click', async () => {
       if (isInstalledLaunch()) return hideGate();
-      if (state.installCompleted) return openInstalledApp();
+      if (state.installCompleted) return;
       if (isIOS()) return showIOSHelp();
       if (!state.deferredPrompt) {
         if (state.installRequested && remainingPreparationSeconds() <= 0) showManualHelp();
@@ -222,7 +247,7 @@
         await promptEvent.prompt();
         const choice = await promptEvent.userChoice;
         if (choice?.outcome === 'accepted') {
-          setStatus('Installation en cours', 'Attends la confirmation de ton appareil. La page s’actualisera automatiquement ensuite.', 'installing');
+          setStatus('Installation en cours', 'Attends la confirmation de ton appareil. Un bouton Rafraîchir apparaîtra ensuite sous le bouton Installer.', 'installing');
           setButton('Installation en cours…', true);
         } else {
           state.installRequested = false;
@@ -235,6 +260,7 @@
       }
     });
     refreshGate();
+    attemptOpenAfterRefresh();
   });
 
   document.addEventListener('visibilitychange', () => {
