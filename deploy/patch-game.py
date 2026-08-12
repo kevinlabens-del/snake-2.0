@@ -75,7 +75,7 @@ html = index.read_text(encoding='utf-8')
 html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
 html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+)?', 'game.js?v=2.2.5-perf1', html)
-html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install2', html)
+html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install3', html)
 scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
@@ -89,7 +89,38 @@ manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\
 sw = Path('dist/sw.js')
 if sw.exists():
     text = sw.read_text(encoding='utf-8')
-    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-open-20260812';", text, count=1)
+    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-open-20260812-v3';", text, count=1)
     if "'./snake2-stats.js'" not in text:
         text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
+
+    critical_fn = """
+async function networkFirstCritical(request) {
+  const cache = await caches.open(CACHE);
+  const key = normalizedRequest(request);
+  try {
+    const response = await fetch(request, { cache: 'no-store' });
+    if (!validResponse(request, response)) throw new Error('Réponse critique invalide');
+    try { await cache.put(key, response.clone()); } catch (_) {}
+    return response;
+  } catch (_) {
+    const cached = await cache.match(key);
+    if (cached) return cached;
+    throw new Error('Ressource critique indisponible');
+  }
+}
+
+"""
+    if 'async function networkFirstCritical' not in text:
+        text = text.replace("self.addEventListener('fetch', event => {", critical_fn + "self.addEventListener('fetch', event => {")
+
+    old_respond = "event.respondWith(request.mode === 'navigate' ? navigationFastStart(request) : (isAudio ? audioResponse(request) : staleWhileRevalidate(request)));"
+    new_respond = """const isInstallGate = /\/install-gate-v225\.js$/i.test(url.pathname);
+  event.respondWith(
+    request.mode === 'navigate'
+      ? navigationFastStart(request)
+      : (isAudio ? audioResponse(request) : (isInstallGate ? networkFirstCritical(request) : staleWhileRevalidate(request)))
+  );"""
+    if old_respond not in text:
+        raise SystemExit('service worker fetch routing point missing')
+    text = text.replace(old_respond, new_respond, 1)
     sw.write_text(text, encoding='utf-8')
