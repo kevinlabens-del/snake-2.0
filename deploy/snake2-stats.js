@@ -3,7 +3,6 @@
   const SUPABASE_URL='https://kokmqcqlpkruoewhewcb.supabase.co';
   const SUPABASE_KEY='sb_publishable_E1RKbaZU7DkVoiyJmFWvqQ_hKBcBG9h';
   const VISITOR_KEY='snake2_visitor_id_v1',SESSION_KEY='snake2_session_id_v1',HEARTBEAT_MS=15000;
-  const GAME_CLICK_RE=/^(jouer|play|commencer|d[eé]marrer|nouvelle partie|rejouer|restart|start|new game)$/i;
   const uuid=()=>globalThis.crypto?.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&3|8);return v.toString(16)});
   const getStoredId=(key,session=false)=>{const store=session?sessionStorage:localStorage;let id=store.getItem(key);if(!id){id=uuid();store.setItem(key,id)}return id};
   const visitorId=getStoredId(VISITOR_KEY),sessionId=getStoredId(SESSION_KEY,true);
@@ -27,8 +26,9 @@
   }
   function render(data){if(!data||typeof data!=='object')return;ensurePanel();for(const key of ['visitors','games','online']){const n=document.querySelector(`[data-s2="${key}"]`),v=Number(data[key]);if(n&&Number.isFinite(v))n.textContent=v.toLocaleString('fr-FR')}}
   async function heartbeat(){if(document.visibilityState==='hidden')return;try{render(await rpc('snake2_heartbeat',{p_session_id:sessionId}))}catch(e){console.debug('[Snake2 stats]',e.message)}}
-  let lastGameAt=0;async function trackGameStart(){const now=Date.now();if(now-lastGameAt<1200)return;lastGameAt=now;try{render(await rpc('snake2_game_started'))}catch(e){console.debug('[Snake2 stats]',e.message)}}window.snake2TrackGameStart=trackGameStart;
-  document.addEventListener('click',e=>{const c=e.target.closest?.('button,a,[role="button"],input[type="button"],input[type="submit"]');if(!c)return;const t=String(c.innerText||c.value||c.getAttribute('aria-label')||'').trim().replace(/\s+/g,' ');if(GAME_CLICK_RE.test(t))trackGameStart()},true);
+  let lastGameAt=0;
+  async function trackGameStart(){const now=Date.now();if(now-lastGameAt<1000)return;lastGameAt=now;try{render(await rpc('snake2_game_started'))}catch(e){console.debug('[Snake2 stats]',e.message)}}
+  window.snake2TrackGameStart=trackGameStart;
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')heartbeat()});window.addEventListener('online',heartbeat);
   async function boot(){ensurePanel();try{render(await rpc('snake2_register_visitor',{p_visitor_id:visitorId}))}catch(e){console.debug('[Snake2 stats]',e.message)}await heartbeat();setInterval(heartbeat,HEARTBEAT_MS)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
