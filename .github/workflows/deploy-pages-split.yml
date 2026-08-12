@@ -48,12 +48,14 @@ jobs:
           grep -q 'points.length > 18 ? 2' dist/game.js
           grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackGameStart'
 
-          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install3'" dist/install-gate-v225.js
-          grep -q '▶ Ouvrir Snake 2.0' dist/install-gate-v225.js
-          grep -q 'hardRefreshAfterInstall' dist/install-gate-v225.js
-          grep -q 'controllerchange' dist/install-gate-v225.js
-          grep -q 'install-gate-v225.js?v=2.2.6-install3' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-install-open-20260812-v3' dist/sw.js
+          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install4'" dist/install-gate-v225.js
+          grep -q 'Installation terminée' dist/install-gate-v225.js
+          grep -q 'Rafraîchir et ouvrir l’application' dist/install-gate-v225.js
+          grep -q 'installRefreshBtn' dist/install-gate-v225.js
+          ! grep -q 'controllerchange' dist/install-gate-v225.js
+          ! grep -q 'hardRefreshAfterInstall' dist/install-gate-v225.js
+          grep -q 'install-gate-v225.js?v=2.2.6-install4' dist/index.html
+          grep -q 'snake-2.0-v2.2.6-install-stable-20260812-v4' dist/sw.js
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isInstallGate' dist/sw.js
           grep -q 'manifest.webmanifest' dist/index.html
