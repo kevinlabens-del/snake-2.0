@@ -24,156 +24,50 @@ jobs:
       - name: Rebuild application ZIP
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           cat Snake-2.0-V2.2.5-SPCK.zip.part-* > Snake-2.0-V2.2.5-SPCK.zip
+          rm -rf dist
           mkdir -p dist
           unzip -q Snake-2.0-V2.2.5-SPCK.zip -d dist
           test -f dist/index.html
 
-      - name: Add live game statistics
+      - name: Add live game statistics and bust PWA cache
         shell: bash
         run: |
           set -euo pipefail
-          cat > dist/snake2-stats.js <<'EOF'
-          (() => {
-            'use strict';
-
-            const SUPABASE_URL = 'https://kokmqcqlpkruoewhewcb.supabase.co';
-            const SUPABASE_KEY = 'sb_publishable_E1RKbaZU7DkVoiyJmFWvqQ_hKBcBG9h';
-            const VISITOR_KEY = 'snake2_visitor_id_v1';
-            const SESSION_KEY = 'snake2_session_id_v1';
-            const HEARTBEAT_MS = 15000;
-            const GAME_CLICK_RE = /^(jouer|play|commencer|d[eé]marrer|nouvelle partie|rejouer|restart|start|new game)$/i;
-
-            const uuid = () => {
-              if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
-              return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-                const r = Math.random() * 16 | 0;
-                const v = c === 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-              });
-            };
-
-            const getStoredId = (key, session = false) => {
-              const store = session ? sessionStorage : localStorage;
-              let id = store.getItem(key);
-              if (!id) {
-                id = uuid();
-                store.setItem(key, id);
-              }
-              return id;
-            };
-
-            const visitorId = getStoredId(VISITOR_KEY, false);
-            const sessionId = getStoredId(SESSION_KEY, true);
-
-            async function rpc(name, body = {}) {
-              const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
-                method: 'POST',
-                headers: {
-                  apikey: SUPABASE_KEY,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body),
-                cache: 'no-store'
-              });
-              if (!response.ok) throw new Error(`stats ${name}: ${response.status}`);
-              return response.json();
-            }
-
-            function ensurePanel() {
-              let panel = document.getElementById('snake2-live-stats');
-              if (panel) return panel;
-
-              const style = document.createElement('style');
-              style.textContent = `
-                #snake2-live-stats{position:fixed;z-index:2147483000;top:max(8px,env(safe-area-inset-top));right:8px;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:min(94vw,390px);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;pointer-events:none;filter:drop-shadow(0 2px 8px rgba(0,0,0,.45))}
-                #snake2-live-stats .s2stat{display:inline-flex;align-items:center;gap:4px;min-height:25px;padding:4px 7px;border:1px solid rgba(94,255,126,.35);border-radius:999px;background:rgba(3,10,7,.72);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);color:#effff2;font-size:10px;font-weight:750;letter-spacing:.2px;line-height:1;white-space:nowrap}
-                #snake2-live-stats .s2num{color:#79ff98;font-variant-numeric:tabular-nums;font-weight:900}
-                #snake2-live-stats .online-dot{width:6px;height:6px;border-radius:50%;background:#48ff74;box-shadow:0 0 7px #48ff74}
-                @media (max-width:460px){#snake2-live-stats{left:6px;right:6px;top:max(6px,env(safe-area-inset-top));justify-content:center}#snake2-live-stats .s2stat{font-size:9px;padding:4px 6px}}
-              `;
-              document.head.appendChild(style);
-
-              panel = document.createElement('div');
-              panel.id = 'snake2-live-stats';
-              panel.setAttribute('aria-label', 'Statistiques Snake 2.0');
-              panel.innerHTML = `
-                <span class="s2stat">👥 <span class="s2num" data-s2="visitors">—</span> visiteurs</span>
-                <span class="s2stat">🎮 <span class="s2num" data-s2="games">—</span> parties</span>
-                <span class="s2stat"><span class="online-dot"></span><span class="s2num" data-s2="online">—</span> en ligne</span>
-              `;
-              document.body.appendChild(panel);
-              return panel;
-            }
-
-            function render(data) {
-              if (!data || typeof data !== 'object') return;
-              ensurePanel();
-              for (const key of ['visitors', 'games', 'online']) {
-                const node = document.querySelector(`[data-s2="${key}"]`);
-                const value = Number(data[key]);
-                if (node && Number.isFinite(value)) node.textContent = value.toLocaleString('fr-FR');
-              }
-            }
-
-            async function heartbeat() {
-              if (document.visibilityState === 'hidden') return;
-              try { render(await rpc('snake2_heartbeat', { p_session_id: sessionId })); }
-              catch (err) { console.debug('[Snake2 stats]', err.message); }
-            }
-
-            let lastGameAt = 0;
-            async function trackGameStart() {
-              const now = Date.now();
-              if (now - lastGameAt < 1200) return;
-              lastGameAt = now;
-              try { render(await rpc('snake2_game_started')); }
-              catch (err) { console.debug('[Snake2 stats]', err.message); }
-            }
-            window.snake2TrackGameStart = trackGameStart;
-
-            document.addEventListener('click', event => {
-              const control = event.target.closest?.('button,a,[role="button"],input[type="button"],input[type="submit"]');
-              if (!control) return;
-              const text = String(control.innerText || control.value || control.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ');
-              if (GAME_CLICK_RE.test(text)) trackGameStart();
-            }, true);
-
-            document.addEventListener('visibilitychange', () => {
-              if (document.visibilityState === 'visible') heartbeat();
-            });
-            window.addEventListener('online', heartbeat);
-
-            async function boot() {
-              ensurePanel();
-              try { render(await rpc('snake2_register_visitor', { p_visitor_id: visitorId })); }
-              catch (err) { console.debug('[Snake2 stats]', err.message); }
-              await heartbeat();
-              setInterval(heartbeat, HEARTBEAT_MS);
-            }
-
-            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
-            else boot();
-          })();
-          EOF
+          cp deploy/snake2-stats.js dist/snake2-stats.js
 
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('dist/index.html')
-          html = p.read_text(encoding='utf-8')
-          marker = '<script src="./snake2-stats.js" defer></script>'
-          if marker not in html:
-              if '</body>' in html.lower():
-                  idx = html.lower().rfind('</body>')
-                  html = html[:idx] + '  ' + marker + '\n' + html[idx:]
-              else:
-                  html += '\n' + marker + '\n'
-          p.write_text(html, encoding='utf-8')
+
+          index = Path('dist/index.html')
+          html = index.read_text(encoding='utf-8')
+          for old in [
+              '<script src="./snake2-stats.js" defer></script>',
+              '<script src="./snake2-stats.js?v=20260812b" defer></script>'
+          ]:
+              html = html.replace(old, '')
+          marker = '<script src="./snake2-stats.js?v=20260812c" defer></script>'
+          low = html.lower()
+          if '</body>' in low:
+              pos = low.rfind('</body>')
+              html = html[:pos] + '  ' + marker + '\n' + html[pos:]
+          else:
+              html += '\n' + marker + '\n'
+          index.write_text(html, encoding='utf-8')
+
+          sw = Path('dist/sw.js')
+          if sw.exists():
+              text = sw.read_text(encoding='utf-8')
+              text = text.replace("const CACHE = 'snake-2.0-v2.2.5-fast-installed-start';", "const CACHE = 'snake-2.0-v2.2.5-stats-20260812c';")
+              if "'./snake2-stats.js'" not in text:
+                  text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
+              sw.write_text(text, encoding='utf-8')
           PY
 
           test -f dist/snake2-stats.js
-          grep -q 'snake2-stats.js' dist/index.html
+          grep -q 'snake2-stats.js?v=20260812c' dist/index.html
+          grep -q 'stats-20260812c' dist/sw.js
           touch dist/.nojekyll
 
       - name: Configure GitHub Pages
