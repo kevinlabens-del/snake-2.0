@@ -43,6 +43,40 @@ jobs:
           cp deploy/install-gate-fixed.js dist/install-gate-v225.js
           python3 deploy/patch-game.py
 
+          # The installed app must always land on its home screen.
+          # Remove the post-install autostart parameter and neutralize the old
+          # helper that automatically clicked the "Jouer" button.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('dist/install-gate-v225.js')
+          text = path.read_text(encoding='utf-8')
+
+          text = re.sub(
+              r"\n\s*launchUrl\.searchParams\.set\('autostart',\s*'1'\);",
+              '',
+              text
+          )
+
+          start = text.find('  function autoStartInstalledGame() {')
+          end = text.find('\n  if (\'serviceWorker\' in navigator)', start)
+          if start < 0 or end < 0:
+              raise SystemExit('autoStartInstalledGame block missing')
+
+          replacement = """  function autoStartInstalledGame() {
+            const params = new URLSearchParams(location.search);
+            if (!params.has('autostart') && !params.has('source') && !params.has('t')) return;
+            const clean = new URL(location.href);
+            ['autostart','source','t'].forEach(key => clean.searchParams.delete(key));
+            history.replaceState(null, '', clean.href);
+          }
+          """
+          text = text[:start] + replacement + text[end:]
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
           # Gameplay checks
           grep -q 'catchUpSteps < 5' dist/game.js
           grep -q 'bodySpineGradient' dist/game.js
@@ -68,6 +102,11 @@ jobs:
           ! grep -q 'window.location.assign(launchUrl.href)' dist/install-gate-v225.js
           ! grep -q "window.open(launchUrl.href, '_blank'" dist/install-gate-v225.js
           ! grep -q "clean.searchParams.set('refresh'" dist/install-gate-v225.js
+
+          # Home-screen launch checks: never auto-start a game after installation.
+          ! grep -q "launchUrl.searchParams.set('autostart', '1')" dist/install-gate-v225.js
+          ! grep -q 'play.click()' dist/install-gate-v225.js
+          grep -q "history.replaceState(null, '', clean.href)" dist/install-gate-v225.js
 
           # Version/cache checks force devices off the broken install flow.
           grep -q "serviceWorker.register('./sw.js?v=2.2.6-install8'" dist/install-gate-v225.js
