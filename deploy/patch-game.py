@@ -70,8 +70,8 @@ index = Path('dist/index.html')
 html = index.read_text(encoding='utf-8')
 html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
-html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+)?', 'game.js?v=2.2.5-perf1', html)
-html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install8', html)
+html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+)?', 'game.js?v=2.2.5-perf2', html)
+html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install9', html)
 scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
@@ -80,9 +80,6 @@ index.write_text(html, encoding='utf-8')
 install_gate = Path('dist/install-gate-v225.js')
 install_text = install_gate.read_text(encoding='utf-8')
 
-# Persist only a browser-confirmed appinstalled success. This survives the browser
-# reload caused by the post-install launch button. If Chrome later emits a fresh
-# beforeinstallprompt, the proof is invalidated because the site is installable again.
 persist_boot = """
   const INSTALL_CONFIRM_KEY = 'snake2_install_confirmed_v4';
   let persistedInstallConfirmedAt = 0;
@@ -106,9 +103,6 @@ if 'navigationInProgress: false' not in install_text:
         raise SystemExit('navigation state marker missing')
     install_text = install_text.replace(state_marker, "    swReady: false,\n    navigationInProgress: false,\n    startedAt: performance.now()", 1)
 
-# Turn the visible post-install control into a real HTTPS link. Chrome's PWA
-# navigation capture works on user link navigation; location.assign() merely
-# reloads the current browser context on devices such as the one in the test video.
 install_text = install_text.replace("    button = document.createElement('button');\n    button.id = 'installRefreshBtn';\n    button.type = 'button';", "    button = document.createElement('a');\n    button.id = 'installRefreshBtn';\n    button.href = './';\n    button.target = '_blank';\n    button.rel = 'noopener';\n    button.setAttribute('role', 'button');", 1)
 
 show_marker = "    if (label) label.textContent = 'Rafraîchir et ouvrir l’application';\n  }"
@@ -127,9 +121,6 @@ show_replacement = """    if (label) label.textContent = 'Rafraîchir et ouvrir 
 if show_marker in install_text:
     install_text = install_text.replace(show_marker, show_replacement, 1)
 
-# Replace the old programmatic navigation with a guard only. The anchor's native
-# user click performs the navigation, giving Chrome a chance to route it to the
-# installed app. No automatic second reload is allowed.
 start = install_text.find('  function refreshAndLaunch(')
 end = install_text.find('\n  function autoStartInstalledGame()', start)
 if start < 0 or end < 0:
@@ -153,22 +144,18 @@ new_launch_fn = """  function refreshAndLaunch(event) {
       const label = link.querySelector('b');
       if (label) label.textContent = 'Ouverture de l’application…';
     }
-    // Do not preventDefault here: the native anchor navigation is intentional.
   }
 """
 install_text = install_text[:start] + new_launch_fn + install_text[end:]
 
-# appinstalled is the authoritative success signal.
 appinstalled_line = "    state.installConfirmedAt = Date.now();"
 if appinstalled_line in install_text and 'localStorage.setItem(INSTALL_CONFIRM_KEY' not in install_text:
     install_text = install_text.replace(appinstalled_line, appinstalled_line + "\n    try { localStorage.setItem(INSTALL_CONFIRM_KEY, String(state.installConfirmedAt)); } catch (_) {}", 1)
 
-# A fresh install prompt proves that Chrome currently considers the app installable.
 before_marker = "  window.addEventListener('beforeinstallprompt', event => {\n    event.preventDefault();"
 if before_marker in install_text and 'localStorage.removeItem(INSTALL_CONFIRM_KEY)' not in install_text.split("window.addEventListener('beforeinstallprompt'",1)[1].split("window.addEventListener('appinstalled'",1)[0]:
     install_text = install_text.replace(before_marker, before_marker + "\n    try { localStorage.removeItem(INSTALL_CONFIRM_KEY); } catch (_) {}\n    persistedInstallConfirmedAt = 0;", 1)
 
-# Prevent refresh hooks from firing while the link is leaving the page.
 refresh_marker = "  function refreshGate() {\n"
 segment = install_text.split('function refreshGate()',1)[1].split('function refreshAndLaunch()',1)[0]
 if 'if (state.navigationInProgress) return;' not in segment:
@@ -189,8 +176,6 @@ visibility_new = """  document.addEventListener('visibilitychange', () => {
 if visibility_old in install_text:
     install_text = install_text.replace(visibility_old, visibility_new, 1)
 
-# In browser fallback after a confirmed install, keep the post-install state instead
-# of falling back to another install prompt. In standalone, normal game startup wins.
 autostart_marker = "  function autoStartInstalledGame() {\n    const params = new URLSearchParams(location.search);\n"
 autostart_guard = """  function autoStartInstalledGame() {
     const params = new URLSearchParams(location.search);
@@ -206,7 +191,7 @@ autostart_guard = """  function autoStartInstalledGame() {
 if autostart_marker in install_text:
     install_text = install_text.replace(autostart_marker, autostart_guard, 1)
 
-install_text = re.sub(r"serviceWorker\.register\('\./sw\.js\?v=2\.2\.6-install\d+'", "serviceWorker.register('./sw.js?v=2.2.6-install8'", install_text, count=1)
+install_text = re.sub(r"serviceWorker\.register\('\./sw\.js\?v=2\.2\.6-install\d+'", "serviceWorker.register('./sw.js?v=2.2.6-install9'", install_text, count=1)
 install_gate.write_text(install_text, encoding='utf-8')
 
 manifest_path = Path('dist/manifest.webmanifest')
@@ -217,7 +202,7 @@ manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\
 sw = Path('dist/sw.js')
 if sw.exists():
     text = sw.read_text(encoding='utf-8')
-    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-truth-20260812-v8';", text, count=1)
+    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-render-perf-20260812-v9';", text, count=1)
     if "'./snake2-stats.js'" not in text:
         text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
 
