@@ -71,11 +71,46 @@ html = index.read_text(encoding='utf-8')
 html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
 html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+)?', 'game.js?v=2.2.5-perf1', html)
-html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install5', html)
+html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install6', html)
 scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
 index.write_text(html, encoding='utf-8')
+
+install_gate = Path('dist/install-gate-v225.js')
+install_text = install_gate.read_text(encoding='utf-8')
+old_launch = """    const launchUrl = new URL('./', location.href);
+    launchUrl.searchParams.set('source', 'installed-open');
+    launchUrl.searchParams.set('autostart', '1');
+    launchUrl.searchParams.set('t', String(Date.now()));
+
+    // Keep the user gesture synchronous so Android can hand the URL to the PWA
+    // when link capture is supported. Failure simply leaves the browser page open.
+    window.open(launchUrl.href, '_blank', 'noopener');
+
+    // Refresh browser state once. No install state is persisted, so a browser reload
+    // can never manufacture an \"installed\" status.
+    setTimeout(() => {
+      const clean = new URL(location.href);
+      clean.searchParams.set('refresh', String(Date.now()));
+      location.replace(clean.href);
+    }, 350);"""
+new_launch = """    const launchUrl = new URL('./', location.href);
+    launchUrl.search = '';
+    launchUrl.hash = '';
+    launchUrl.searchParams.set('source', 'installed-open');
+    launchUrl.searchParams.set('autostart', '1');
+    launchUrl.searchParams.set('t', String(Date.now()));
+
+    // One navigation only. Using _self avoids a competing browser tab plus reload.
+    // On Android, an installed PWA that captures this scope can take over this URL;
+    // otherwise the same page reloads cleanly and never creates a second tab.
+    window.location.assign(launchUrl.href);"""
+if old_launch not in install_text:
+    raise SystemExit('refreshAndLaunch navigation block missing')
+install_text = install_text.replace(old_launch, new_launch, 1)
+install_text = install_text.replace("serviceWorker.register('./sw.js?v=2.2.6-install5'", "serviceWorker.register('./sw.js?v=2.2.6-install6'", 1)
+install_gate.write_text(install_text, encoding='utf-8')
 
 manifest_path = Path('dist/manifest.webmanifest')
 manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -85,7 +120,7 @@ manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\
 sw = Path('dist/sw.js')
 if sw.exists():
     text = sw.read_text(encoding='utf-8')
-    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-truth-20260812-v5';", text, count=1)
+    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-truth-20260812-v6';", text, count=1)
     if "'./snake2-stats.js'" not in text:
         text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
 
