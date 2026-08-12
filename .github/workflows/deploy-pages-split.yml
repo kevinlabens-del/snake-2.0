@@ -32,20 +32,57 @@ jobs:
           unzip -q Snake-2.0-V2.2.5-SPCK.zip -d dist
           test -f dist/index.html
           test -f dist/game.js
+          test -f dist/manifest.webmanifest
+          test -f dist/sw.js
 
-      - name: Apply verified runtime corrections
+      - name: Apply verified runtime and installation corrections
         shell: bash
         run: |
           set -euo pipefail
           cp deploy/snake2-stats.js dist/snake2-stats.js
+          cp deploy/install-gate-fixed.js dist/install-gate-v225.js
           python3 deploy/patch-game.py
+
+          # Gameplay/runtime checks
           grep -q 'catchUpSteps < 5' dist/game.js
           grep -q 'bodySpineGradient' dist/game.js
           grep -q 'points.length > 18 ? 2' dist/game.js
           grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackGameStart'
+
+          # Installation checks
+          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install1'" dist/install-gate-v225.js
+          grep -q 'Préparer l’installation' dist/install-gate-v225.js
+          grep -q 'Installation manuelle' dist/install-gate-v225.js
+          grep -q 'install-gate-v225.js?v=2.2.6-install1' dist/index.html
+          grep -q 'snake-2.0-v2.2.6-install-fix-20260812' dist/sw.js
+          grep -q 'manifest.webmanifest' dist/index.html
+
+          # Manifest and service worker integrity checks
+          python3 - <<'PY'
+          import json, re
+          from pathlib import Path
+          manifest = json.loads(Path('dist/manifest.webmanifest').read_text(encoding='utf-8'))
+          assert manifest.get('name') or manifest.get('short_name')
+          assert manifest.get('start_url')
+          assert manifest.get('display') in {'fullscreen','standalone','minimal-ui','window-controls-overlay'}
+          sizes = {icon.get('sizes') for icon in manifest.get('icons', [])}
+          assert '192x192' in sizes and '512x512' in sizes
+          sw = Path('dist/sw.js').read_text(encoding='utf-8')
+          core = re.search(r'const CORE_ASSETS = \[(.*?)\];', sw, re.S)
+          assert core
+          assets = re.findall(r"'([^']+)'", core.group(1))
+          missing = []
+          for asset in assets:
+              rel = asset[2:] if asset.startswith('./') else asset
+              if not Path('dist', rel).exists(): missing.append(rel)
+          assert not missing, f'Missing service worker assets: {missing}'
+          PY
+
+          node --check dist/install-gate-v225.js
+          node --check dist/sw.js
+          node --check dist/game.js
           grep -q 'game.js?v=2.2.5-perf1' dist/index.html
           grep -q 'snake2-stats.js?v=20260812h' dist/index.html
-          grep -q 'perf-realtime-20260812h' dist/sw.js
           grep -q 'snake2-public-stats' dist/snake2-stats.js
           touch dist/.nojekyll
 
