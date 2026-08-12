@@ -55,9 +55,14 @@ jobs:
           grep -q 'Installation terminée' dist/install-gate-v225.js
           grep -q 'Rafraîchir et ouvrir l’application' dist/install-gate-v225.js
           grep -q 'installRefreshBtn' dist/install-gate-v225.js
-          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install5'" dist/install-gate-v225.js
-          grep -q 'install-gate-v225.js?v=2.2.6-install5' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-install-truth-20260812-v5' dist/sw.js
+          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install6'" dist/install-gate-v225.js
+          grep -q 'install-gate-v225.js?v=2.2.6-install6' dist/index.html
+          grep -q 'snake-2.0-v2.2.6-install-truth-20260812-v6' dist/sw.js
+
+          # Refresh/open must be a single same-context navigation
+          grep -q 'window.location.assign(launchUrl.href)' dist/install-gate-v225.js
+          ! grep -q "window.open(launchUrl.href, '_blank'" dist/install-gate-v225.js
+          ! grep -q "clean.searchParams.set('refresh'" dist/install-gate-v225.js
 
           # Explicitly forbid persistent installation truth and previous reload loops
           ! grep -q "installCompleted: localStorage" dist/install-gate-v225.js
