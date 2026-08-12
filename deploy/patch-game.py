@@ -71,7 +71,7 @@ html = index.read_text(encoding='utf-8')
 html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
 html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+)?', 'game.js?v=2.2.5-perf1', html)
-html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install6', html)
+html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install7', html)
 scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
@@ -79,6 +79,7 @@ index.write_text(html, encoding='utf-8')
 
 install_gate = Path('dist/install-gate-v225.js')
 install_text = install_gate.read_text(encoding='utf-8')
+
 old_launch = """    const launchUrl = new URL('./', location.href);
     launchUrl.searchParams.set('source', 'installed-open');
     launchUrl.searchParams.set('autostart', '1');
@@ -95,7 +96,23 @@ old_launch = """    const launchUrl = new URL('./', location.href);
       clean.searchParams.set('refresh', String(Date.now()));
       location.replace(clean.href);
     }, 350);"""
-new_launch = """    const launchUrl = new URL('./', location.href);
+new_launch = """    if (state.navigationInProgress) return;
+    state.navigationInProgress = true;
+    clearInterval(state.preparationTimer);
+    state.preparationTimer = null;
+
+    const launchUrl = new URL('./', location.href);
+    launchUrl.search = '';
+    launchUrl.hash = '';
+    launchUrl.searchParams.set('source', 'installed-open');
+    launchUrl.searchParams.set('autostart', '1');
+    launchUrl.searchParams.set('t', String(Date.now()));
+
+    // One atomic navigation only. Once it starts, every installation refresh hook
+    // is ignored until the browser leaves this document.
+    window.location.assign(launchUrl.href);"""
+
+single_launch = """    const launchUrl = new URL('./', location.href);
     launchUrl.search = '';
     launchUrl.hash = '';
     launchUrl.searchParams.set('source', 'installed-open');
@@ -106,10 +123,54 @@ new_launch = """    const launchUrl = new URL('./', location.href);
     // On Android, an installed PWA that captures this scope can take over this URL;
     // otherwise the same page reloads cleanly and never creates a second tab.
     window.location.assign(launchUrl.href);"""
-if old_launch not in install_text:
+
+if old_launch in install_text:
+    install_text = install_text.replace(old_launch, new_launch, 1)
+elif single_launch in install_text:
+    install_text = install_text.replace(single_launch, new_launch, 1)
+elif 'state.navigationInProgress = true;' not in install_text:
     raise SystemExit('refreshAndLaunch navigation block missing')
-install_text = install_text.replace(old_launch, new_launch, 1)
-install_text = install_text.replace("serviceWorker.register('./sw.js?v=2.2.6-install5'", "serviceWorker.register('./sw.js?v=2.2.6-install6'", 1)
+
+state_marker = "    swReady: false,\n    startedAt: performance.now()"
+if 'navigationInProgress: false' not in install_text:
+    if state_marker not in install_text:
+        raise SystemExit('install state marker missing')
+    install_text = install_text.replace(state_marker, "    swReady: false,\n    navigationInProgress: false,\n    startedAt: performance.now()", 1)
+
+refresh_marker = "  function refreshGate() {\n"
+if "if (state.navigationInProgress) return;" not in install_text.split('function refreshGate()',1)[1].split('function refreshAndLaunch()',1)[0]:
+    install_text = install_text.replace(refresh_marker, refresh_marker + "    if (state.navigationInProgress) return;\n", 1)
+
+autostart_marker = "  function autoStartInstalledGame() {\n    const params = new URLSearchParams(location.search);\n"
+autostart_guard = """  function autoStartInstalledGame() {
+    const params = new URLSearchParams(location.search);
+    if (params.get('autostart') === '1' && !isInstalledLaunch()) {
+      const clean = new URL(location.href);
+      ['autostart','source','t'].forEach(key => clean.searchParams.delete(key));
+      history.replaceState(null, '', clean.href);
+      return;
+    }
+"""
+if autostart_marker in install_text:
+    install_text = install_text.replace(autostart_marker, autostart_guard, 1)
+
+visibility_old = """  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshGate();
+  });"""
+visibility_new = """  document.addEventListener('visibilitychange', () => {
+    if (!state.navigationInProgress && document.visibilityState === 'visible') refreshGate();
+  });
+
+  window.addEventListener('pagehide', () => {
+    state.navigationInProgress = true;
+    clearInterval(state.preparationTimer);
+    state.preparationTimer = null;
+  });"""
+if visibility_old in install_text:
+    install_text = install_text.replace(visibility_old, visibility_new, 1)
+
+install_text = install_text.replace("serviceWorker.register('./sw.js?v=2.2.6-install5'", "serviceWorker.register('./sw.js?v=2.2.6-install7'", 1)
+install_text = install_text.replace("serviceWorker.register('./sw.js?v=2.2.6-install6'", "serviceWorker.register('./sw.js?v=2.2.6-install7'", 1)
 install_gate.write_text(install_text, encoding='utf-8')
 
 manifest_path = Path('dist/manifest.webmanifest')
@@ -120,7 +181,7 @@ manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\
 sw = Path('dist/sw.js')
 if sw.exists():
     text = sw.read_text(encoding='utf-8')
-    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-truth-20260812-v6';", text, count=1)
+    text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';", "const CACHE = 'snake-2.0-v2.2.6-install-truth-20260812-v7';", text, count=1)
     if "'./snake2-stats.js'" not in text:
         text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
 
