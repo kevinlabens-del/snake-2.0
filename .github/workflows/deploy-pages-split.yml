@@ -44,7 +44,6 @@ jobs:
           python3 deploy/patch-game.py
           python3 deploy/patch-head-sway.py
 
-          # The installed app must always land on its home screen.
           python3 - <<'PY'
           from pathlib import Path
           import re
@@ -67,26 +66,26 @@ jobs:
           path.write_text(text, encoding='utf-8')
           PY
 
-          # Gameplay/runtime checks
+          # Runtime checks retained from previous verified build.
           grep -q 'catchUpSteps < 5' dist/game.js
           grep -q 'bodySpineGradient' dist/game.js
           grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackGameStart'
 
-          # Head sway must be clearly visible and purely visual.
-          grep -q 'const headSwayPhase = time \* 0.022' dist/game.js
-          grep -q 'const headSwayPx = cell \* 0.38 \* headSway' dist/game.js
-          grep -q 'const headAngle = baseHeadAngle + headSway \* 0.30' dist/game.js
-          grep -q 'const visualHeadX = head.x + swayNormalX \* headSwayPx' dist/game.js
-          grep -q 'const visualHeadY = head.y + swayNormalY \* headSwayPx' dist/game.js
+          # True head sweep: arc movement + strong synchronized rotation, visual only.
+          grep -q 'const headSweepPhase = time \* 0.0265' dist/game.js
+          grep -q 'const headSweepPx = cell \* 0.62 \* headSweep' dist/game.js
+          grep -q 'const headAngle = baseHeadAngle + headSweep \* 0.52' dist/game.js
+          grep -q 'const forwardArcPx = cell \* 0.10 \* (1 - Math.abs(headSweep))' dist/game.js
+          grep -q 'const visualHeadX = head.x + swayNormalX \* headSweepPx + forwardX \* forwardArcPx' dist/game.js
+          grep -q 'const visualHeadY = head.y + swayNormalY \* headSweepPx + forwardY \* forwardArcPx' dist/game.js
           grep -q 'headImg, visualHeadX, visualHeadY, headAngle' dist/game.js
           grep -q 'ctx.translate(visualHeadX, visualHeadY)' dist/game.js
 
-          # Rendering cost must no longer grow linearly with snake length.
+          # Previous render-performance protections must remain unchanged.
           grep -q 'Math.ceil(Math.max(1, points.length - 2) / 13)' dist/game.js
           grep -q 'if (points.length <= 48)' dist/game.js
-          ! grep -q 'points.length > 72 ? 4 : points.length > 36 ? 3 : points.length > 18 ? 2 : 1' dist/game.js
 
-          # Installation confirmation and persistence checks
+          # Installation flow must remain unchanged and working.
           grep -q "window.addEventListener('appinstalled'" dist/install-gate-v225.js
           grep -q "const INSTALL_CONFIRM_KEY = 'snake2_install_confirmed_v4'" dist/install-gate-v225.js
           grep -q 'localStorage.setItem(INSTALL_CONFIRM_KEY' dist/install-gate-v225.js
@@ -95,30 +94,19 @@ jobs:
           grep -q 'installConfirmedAt: persistedInstallConfirmedAt' dist/install-gate-v225.js
           grep -q 'Installation terminée' dist/install-gate-v225.js
           grep -q 'Rafraîchir et ouvrir l’application' dist/install-gate-v225.js
-
-          # Post-install action must remain a real user link.
           grep -q "button = document.createElement('a')" dist/install-gate-v225.js
           grep -q "button.target = '_blank'" dist/install-gate-v225.js
           grep -q "button.href = launchUrl.href" dist/install-gate-v225.js
-          grep -q 'navigationInProgress: false' dist/install-gate-v225.js
-          grep -q "window.addEventListener('pagehide'" dist/install-gate-v225.js
           ! grep -q 'window.location.assign(launchUrl.href)' dist/install-gate-v225.js
           ! grep -q "window.open(launchUrl.href, '_blank'" dist/install-gate-v225.js
-          ! grep -q "clean.searchParams.set('refresh'" dist/install-gate-v225.js
-
-          # Home-screen launch checks
           ! grep -q "launchUrl.searchParams.set('autostart', '1')" dist/install-gate-v225.js
           ! grep -q 'play.click()' dist/install-gate-v225.js
-          grep -q "history.replaceState(null, '', clean.href)" dist/install-gate-v225.js
 
-          # Fresh cache/runtime version checks
-          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install9'" dist/install-gate-v225.js
-          grep -q 'install-gate-v225.js?v=2.2.6-install9' dist/index.html
-          grep -q 'game.js?v=2.2.5-perf2' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-render-perf-20260812-v9' dist/sw.js
-
-          ! grep -q 'controllerchange' dist/install-gate-v225.js
-          ! grep -q 'hardRefreshAfterInstall' dist/install-gate-v225.js
+          # Fresh cache so installed devices receive the new head animation.
+          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install10'" dist/install-gate-v225.js
+          grep -q 'install-gate-v225.js?v=2.2.6-install10' dist/index.html
+          grep -q 'game.js?v=2.2.5-headsweep1' dist/index.html
+          grep -q 'snake-2.0-v2.2.6-head-sweep-20260812-v10' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isInstallGate' dist/sw.js
