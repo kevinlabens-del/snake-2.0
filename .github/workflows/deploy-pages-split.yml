@@ -1,0 +1,52 @@
+name: Deploy Snake 2.0 Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rebuild application ZIP
+        shell: bash
+        run: |
+          set -e
+          cat Snake-2.0-V2.2.5-SPCK.zip.part-* > Snake-2.0-V2.2.5-SPCK.zip
+          mkdir -p dist
+          unzip -q Snake-2.0-V2.2.5-SPCK.zip -d dist
+          test -f dist/index.html
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
