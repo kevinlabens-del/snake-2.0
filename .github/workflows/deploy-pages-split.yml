@@ -43,21 +43,18 @@ jobs:
           cp deploy/install-gate-fixed.js dist/install-gate-v225.js
           python3 deploy/patch-game.py
 
-          # Gameplay/runtime checks
           grep -q 'catchUpSteps < 5' dist/game.js
           grep -q 'bodySpineGradient' dist/game.js
           grep -q 'points.length > 18 ? 2' dist/game.js
           grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackGameStart'
 
-          # Installation checks
-          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install1'" dist/install-gate-v225.js
-          grep -q 'Préparer l’installation' dist/install-gate-v225.js
-          grep -q 'Installation manuelle' dist/install-gate-v225.js
-          grep -q 'install-gate-v225.js?v=2.2.6-install1' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-install-fix-20260812' dist/sw.js
+          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install2'" dist/install-gate-v225.js
+          grep -q 'Rafraîchir et ouvrir Snake 2.0' dist/install-gate-v225.js
+          grep -q 'OPEN_AFTER_REFRESH_KEY' dist/install-gate-v225.js
+          grep -q 'install-gate-v225.js?v=2.2.6-install2' dist/index.html
+          grep -q 'snake-2.0-v2.2.6-install-open-20260812' dist/sw.js
           grep -q 'manifest.webmanifest' dist/index.html
 
-          # Manifest and service worker integrity checks
           python3 - <<'PY'
           import json, re
           from pathlib import Path
@@ -67,6 +64,7 @@ jobs:
           assert manifest.get('display') in {'fullscreen','standalone','minimal-ui','window-controls-overlay'}
           sizes = {icon.get('sizes') for icon in manifest.get('icons', [])}
           assert '192x192' in sizes and '512x512' in sizes
+          assert manifest.get('launch_handler', {}).get('client_mode')
           sw = Path('dist/sw.js').read_text(encoding='utf-8')
           core = re.search(r'const CORE_ASSETS = \[(.*?)\];', sw, re.S)
           assert core
