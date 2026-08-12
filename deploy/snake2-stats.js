@@ -5,7 +5,7 @@
   const SUPABASE_KEY = 'sb_publishable_E1RKbaZU7DkVoiyJmFWvqQ_hKBcBG9h';
   const VISITOR_KEY = 'snake2_visitor_id_v1';
   const SESSION_KEY = 'snake2_session_id_v1';
-  const HEARTBEAT_MS = 4000;
+  const FALLBACK_MS = 10000;
 
   const uuid = () => globalThis.crypto?.randomUUID
     ? crypto.randomUUID()
@@ -27,6 +27,9 @@
 
   const visitorId = getStoredId(VISITOR_KEY, false);
   const sessionId = getStoredId(SESSION_KEY, true);
+  let realtimeChannel = null;
+  let realtimeReady = false;
+  let fallbackBusy = false;
 
   async function rpc(name, body = {}, keepalive = false) {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
@@ -68,29 +71,40 @@
     return panel;
   }
 
-  function render(data) {
-    if (!data || typeof data !== 'object') return;
-    ensurePanel();
-    for (const key of ['visitors', 'games', 'online']) {
-      const node = document.querySelector(`[data-s2="${key}"]`);
-      const value = Number(data[key]);
-      if (node && Number.isFinite(value)) node.textContent = value.toLocaleString('fr-FR');
-    }
+  function setNumber(key, value) {
+    const node = document.querySelector(`[data-s2="${key}"]`);
+    const number = Number(value);
+    if (node && Number.isFinite(number)) node.textContent = number.toLocaleString('fr-FR');
   }
 
-  let heartbeatBusy = false;
-  async function heartbeat() {
-    if (heartbeatBusy || document.visibilityState === 'hidden' || !navigator.onLine) return;
-    heartbeatBusy = true;
+  function renderTotals(data) {
+    if (!data || typeof data !== 'object') return;
+    ensurePanel();
+    setNumber('visitors', data.visitors ?? data.total_visitors);
+    setNumber('games', data.games ?? data.total_games);
+    if (!realtimeReady && data.online != null) setNumber('online', data.online);
+  }
+
+  function renderPresence() {
+    if (!realtimeChannel) return;
+    const state = realtimeChannel.presenceState();
+    const uniqueVisitors = Object.keys(state || {}).length;
+    setNumber('online', uniqueVisitors);
+  }
+
+  async function fallbackRefresh() {
+    if (fallbackBusy || document.visibilityState === 'hidden' || !navigator.onLine) return;
+    fallbackBusy = true;
     try {
-      render(await rpc('snake2_heartbeat', {
+      const data = await rpc('snake2_heartbeat', {
         p_session_id: sessionId,
         p_visitor_id: visitorId
-      }));
+      });
+      renderTotals(data);
     } catch (error) {
-      console.debug('[Snake2 stats]', error.message);
+      console.debug('[Snake2 stats fallback]', error.message);
     } finally {
-      heartbeatBusy = false;
+      fallbackBusy = false;
     }
   }
 
@@ -100,14 +114,57 @@
     if (now - lastCompletedAt < 1500) return;
     lastCompletedAt = now;
     try {
-      render(await rpc('snake2_game_started'));
+      renderTotals(await rpc('snake2_game_started'));
     } catch (error) {
-      console.debug('[Snake2 stats]', error.message);
+      console.debug('[Snake2 stats level]', error.message);
     }
   }
   window.snake2TrackGameStart = trackCompletedLevel;
 
-  function leavePresence() {
+  async function startRealtime() {
+    if (!window.supabase?.createClient) {
+      console.debug('[Snake2 stats] Supabase Realtime library unavailable; fallback active');
+      return;
+    }
+
+    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      realtime: { params: { eventsPerSecond: 20 } }
+    });
+
+    realtimeChannel = client.channel('snake2-live-players', {
+      config: { presence: { key: visitorId } }
+    });
+
+    realtimeChannel
+      .on('presence', { event: 'sync' }, renderPresence)
+      .on('presence', { event: 'join' }, renderPresence)
+      .on('presence', { event: 'leave' }, renderPresence)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'snake2_stats',
+        filter: 'id=eq.1'
+      }, payload => {
+        renderTotals(payload.new || {});
+      })
+      .subscribe(async status => {
+        if (status === 'SUBSCRIBED') {
+          realtimeReady = true;
+          await realtimeChannel.track({ visitor_id: visitorId, online_at: new Date().toISOString() });
+          renderPresence();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          realtimeReady = false;
+        }
+      });
+
+    const leaveRealtime = () => {
+      try { realtimeChannel?.untrack(); } catch (_) {}
+    };
+    window.addEventListener('pagehide', leaveRealtime, { once: true });
+  }
+
+  function leaveFallbackPresence() {
     rpc('snake2_leave', {
       p_session_id: sessionId,
       p_visitor_id: visitorId
@@ -115,15 +172,21 @@
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') heartbeat();
+    if (document.visibilityState === 'visible') fallbackRefresh();
   });
-  window.addEventListener('online', heartbeat);
-  window.addEventListener('pagehide', leavePresence);
+  window.addEventListener('online', fallbackRefresh);
+  window.addEventListener('pagehide', leaveFallbackPresence);
 
   async function boot() {
     ensurePanel();
-    await heartbeat();
-    setInterval(heartbeat, HEARTBEAT_MS);
+    try {
+      renderTotals(await rpc('snake2_register_visitor', { p_visitor_id: visitorId }));
+    } catch (error) {
+      console.debug('[Snake2 stats visitor]', error.message);
+    }
+    await fallbackRefresh();
+    await startRealtime();
+    setInterval(fallbackRefresh, FALLBACK_MS);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
