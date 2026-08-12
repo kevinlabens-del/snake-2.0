@@ -1,47 +1,32 @@
 'use strict';
 (() => {
-  const INSTALL_CONFIRMED_KEY = 'snake2_install_confirmed_v1';
-  const OPEN_AFTER_REFRESH_KEY = 'snake2_open_after_refresh_v1';
+  const INSTALL_CONFIRMED_KEY = 'snake2_install_confirmed_v2';
+  const SW_RELOAD_KEY = 'snake2_sw_reload_once_v2';
   const state = {
     deferredPrompt: null,
     splashFinished: false,
-    installCompleted: localStorage.getItem(INSTALL_CONFIRMED_KEY) === '1',
+    installCompleted: localStorage.getItem(INSTALL_CONFIRMED_KEY) === '1' || new URLSearchParams(location.search).get('installed') === '1',
     installRequested: false,
     preparationTimer: null,
     swReady: false,
     startedAt: performance.now()
   };
 
+  if (state.installCompleted) localStorage.setItem(INSTALL_CONFIRMED_KEY, '1');
+
   const INSTALL_READY_DELAY_MS = 32000;
+  const qs = id => document.getElementById(id);
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = () => /android/i.test(navigator.userAgent);
 
   const isInstalledLaunch = () => {
     try {
-      return window.matchMedia('(display-mode: standalone)').matches ||
-             window.matchMedia('(display-mode: fullscreen)').matches ||
-             window.navigator.standalone === true ||
+      return matchMedia('(display-mode: standalone)').matches ||
+             matchMedia('(display-mode: fullscreen)').matches ||
+             navigator.standalone === true ||
              document.referrer.startsWith('android-app://');
-    } catch (_) {
-      return false;
-    }
+    } catch (_) { return false; }
   };
-
-  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const isAndroid = () => /android/i.test(navigator.userAgent);
-  const qs = id => document.getElementById(id);
-
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js?v=2.2.6-install2', { updateViaCache: 'none' })
-      .then(() => navigator.serviceWorker.ready)
-      .then(() => {
-        state.swReady = true;
-        refreshGate();
-      })
-      .catch(error => {
-        console.debug('[Snake2 install] service worker unavailable', error?.message || error);
-        refreshGate();
-      });
-  }
 
   function setStatus(title, text, mode = 'waiting') {
     const titleEl = qs('installGateTitle');
@@ -52,7 +37,7 @@
     if (gate) gate.dataset.mode = mode;
   }
 
-  function setButton(label = 'Installer Snake 2.0', disabled = false) {
+  function setButton(label, disabled = false) {
     const button = qs('installGateBtn');
     if (!button) return;
     const labelEl = button.querySelector('b');
@@ -68,31 +53,30 @@
     if (html) help.innerHTML = html;
   }
 
+  function showInstalledAction() {
+    setStatus('Snake 2.0 est installé', 'Installation terminée. Appuie ci-dessous pour ouvrir le jeu dans l’application.', 'installed');
+    setButton('▶ Ouvrir Snake 2.0', false);
+    setHelp('<strong>Installation terminée ✓</strong><span>Snake 2.0 est maintenant installé sur cet appareil.</span><span>Appuie sur « Ouvrir Snake 2.0 ». Si Android ne bascule pas automatiquement dans l’application, ouvre son icône depuis l’écran d’accueil.</span>');
+  }
+
   function showIOSHelp() {
-    setHelp('<strong>Installation sur iPhone / iPad</strong><span>1. Ouvre cette page dans Safari.</span><span>2. Appuie sur Partager ⤴︎.</span><span>3. Choisis « Sur l’écran d’accueil » puis « Ajouter ».</span><span>4. Lance Snake 2.0 depuis sa nouvelle icône.</span>');
     setStatus('Installer Snake 2.0', 'Sur iPhone et iPad, l’installation se fait depuis le menu Partager de Safari.', 'ios');
     setButton('Voir les étapes iPhone', false);
+    setHelp('<strong>Installation sur iPhone / iPad</strong><span>1. Ouvre cette page dans Safari.</span><span>2. Appuie sur Partager ⤴︎.</span><span>3. Choisis « Sur l’écran d’accueil » puis « Ajouter ».</span><span>4. Lance Snake 2.0 depuis sa nouvelle icône.</span>');
   }
 
   function showManualHelp() {
-    const deviceText = isAndroid()
-      ? '<span>Android : ouvre le menu ⋮ de Chrome, Edge ou Samsung Internet puis choisis « Installer l’application » ou « Ajouter à l’écran d’accueil ».</span>'
-      : '<span>Ouvre le menu de ton navigateur puis choisis « Installer l’application » ou « Ajouter à l’écran d’accueil ».</span>';
-    setHelp('<strong>Installation manuelle</strong>' + deviceText + '<span>Si Snake 2.0 est déjà installé, lance-le directement depuis son icône.</span>');
-    setStatus('Installation via le navigateur', 'L’invite automatique n’est pas disponible sur ce navigateur pour le moment. Utilise le menu du navigateur.', 'manual');
+    const device = isAndroid()
+      ? '<span>Android : menu ⋮ → « Installer l’application » ou « Ajouter à l’écran d’accueil ».</span>'
+      : '<span>Menu du navigateur → « Installer l’application » ou « Ajouter à l’écran d’accueil ».</span>';
+    setStatus('Installation via le navigateur', 'L’invite automatique n’est pas disponible. Utilise le menu du navigateur.', 'manual');
     setButton('Afficher les instructions', false);
-  }
-
-  function showInstalledAction() {
-    setHelp('<strong>Installation terminée ✓</strong><span>Appuie ci-dessous. La page va être rafraîchie puis Android tentera d’ouvrir Snake 2.0 dans l’application installée.</span><span>Si ton navigateur ne bascule pas automatiquement vers l’application, ouvre simplement l’icône Snake 2.0 sur ton écran d’accueil.</span>');
-    setStatus('Snake 2.0 est installé', 'L’installation est terminée. Tu peux maintenant ouvrir le jeu dans l’application.', 'installed');
-    setButton('↻ Rafraîchir et ouvrir Snake 2.0', false);
+    setHelp('<strong>Installation manuelle</strong>' + device + '<span>Si Snake 2.0 est déjà installé, lance-le depuis son icône.</span>');
   }
 
   function hideGate() {
     clearInterval(state.preparationTimer);
     state.preparationTimer = null;
-    localStorage.setItem(INSTALL_CONFIRMED_KEY, '1');
     const gate = qs('installGate');
     document.documentElement.classList.remove('install-lock');
     document.body.classList.remove('install-required');
@@ -114,8 +98,7 @@
   }
 
   function remainingPreparationSeconds() {
-    const elapsed = performance.now() - state.startedAt;
-    return Math.max(0, Math.ceil((INSTALL_READY_DELAY_MS - elapsed) / 1000));
+    return Math.max(0, Math.ceil((INSTALL_READY_DELAY_MS - (performance.now() - state.startedAt)) / 1000));
   }
 
   function updatePreparation() {
@@ -127,8 +110,7 @@
     }
     const remaining = remainingPreparationSeconds();
     if (remaining > 0) {
-      const swText = state.swReady ? '' : ' · vérification de l’application';
-      setStatus('Préparation de l’installation', `Chrome prépare l’installation${swText}. Reste sur cette page encore ${remaining} s environ.`, 'preparing');
+      setStatus('Préparation de l’installation', `Chrome prépare l’installation${state.swReady ? '' : ' · vérification de l’application'}. Reste sur cette page encore ${remaining} s environ.`, 'preparing');
       setButton(`Préparation… ${remaining} s`, true);
     } else {
       clearInterval(state.preparationTimer);
@@ -141,9 +123,7 @@
     state.installRequested = true;
     setHelp('');
     updatePreparation();
-    if (!state.preparationTimer && !state.deferredPrompt) {
-      state.preparationTimer = setInterval(updatePreparation, 1000);
-    }
+    if (!state.preparationTimer && !state.deferredPrompt) state.preparationTimer = setInterval(updatePreparation, 1000);
   }
 
   function refreshGate() {
@@ -153,60 +133,56 @@
     }
     if (!state.splashFinished) return;
     showGate();
-
-    if (state.installCompleted) {
-      showInstalledAction();
-      return;
-    }
-
-    if (isIOS()) {
-      showIOSHelp();
-      return;
-    }
-
+    if (state.installCompleted) return showInstalledAction();
+    if (isIOS()) return showIOSHelp();
     if (state.deferredPrompt) {
       setHelp('');
-      setStatus('Snake 2.0 est prêt', 'L’installation est prête. Appuie sur le bouton ci-dessous pour confirmer avec ton navigateur.', 'ready');
+      setStatus('Snake 2.0 est prêt', 'L’installation est prête. Appuie sur le bouton ci-dessous pour confirmer.', 'ready');
       setButton('Installer maintenant', false);
       return;
     }
-
-    if (state.installRequested) {
-      updatePreparation();
-      return;
-    }
-
-    setHelp('<strong>Pourquoi une préparation ?</strong><span>Le navigateur doit d’abord vérifier l’application avant d’autoriser l’installation. Appuie une fois ci-dessous pour commencer.</span>');
+    if (state.installRequested) return updatePreparation();
     setStatus('Installe Snake 2.0', 'Prépare l’installation de l’application sur cet appareil.', 'waiting');
     setButton('Préparer l’installation', false);
+    setHelp('<strong>Pourquoi une préparation ?</strong><span>Le navigateur doit d’abord vérifier l’application avant d’autoriser son installation.</span>');
   }
 
-  function refreshAndOpenInstalledApp() {
-    sessionStorage.setItem(OPEN_AFTER_REFRESH_KEY, '1');
-    setButton('Rafraîchissement…', true);
-    setStatus('Ouverture de Snake 2.0', 'Actualisation de la page avant ouverture de l’application…', 'opening');
-    location.reload();
+  function hardRefreshAfterInstall() {
+    const url = new URL(location.href);
+    url.searchParams.set('installed', '1');
+    url.searchParams.set('refresh', String(Date.now()));
+    location.replace(url.href);
   }
 
-  function attemptOpenAfterRefresh() {
-    if (sessionStorage.getItem(OPEN_AFTER_REFRESH_KEY) !== '1') return;
-    sessionStorage.removeItem(OPEN_AFTER_REFRESH_KEY);
-    if (isInstalledLaunch()) return;
-
-    // A normal HTTPS navigation is intentionally used here: on Android browsers
-    // supporting installed-web-app link capture, it is handed to the installed app.
-    // Browsers that do not support capture simply remain on this page and keep the
-    // explicit launch instructions visible instead of unlocking the browser version.
+  function openInstalledApp() {
+    setButton('Ouverture…', true);
+    setStatus('Ouverture de Snake 2.0', 'Tentative d’ouverture de l’application installée…', 'opening');
+    const url = new URL('./', location.href);
+    url.searchParams.set('source', 'installed-open');
+    url.searchParams.set('t', String(Date.now()));
+    const link = document.createElement('a');
+    link.href = url.href;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
     setTimeout(() => {
-      const link = document.createElement('a');
-      link.href = new URL('./', location.href).href;
-      link.target = '_blank';
-      link.rel = 'noopener';
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => link.remove(), 1500);
-    }, 450);
+      link.remove();
+      showInstalledAction();
+    }, 1200);
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (sessionStorage.getItem(SW_RELOAD_KEY) === '1') return;
+      sessionStorage.setItem(SW_RELOAD_KEY, '1');
+      location.reload();
+    });
+    navigator.serviceWorker.register('./sw.js?v=2.2.6-install3', { updateViaCache: 'none' })
+      .then(reg => reg.update().then(() => navigator.serviceWorker.ready))
+      .then(() => { state.swReady = true; refreshGate(); })
+      .catch(error => { console.debug('[Snake2 install] service worker unavailable', error?.message || error); refreshGate(); });
   }
 
   window.addEventListener('beforeinstallprompt', event => {
@@ -221,33 +197,23 @@
     state.installCompleted = true;
     state.deferredPrompt = null;
     localStorage.setItem(INSTALL_CONFIRMED_KEY, '1');
-    refreshGate();
+    showInstalledAction();
+    setStatus('Installation terminée ✓', 'Actualisation automatique pour finaliser l’installation…', 'installed');
+    setButton('Actualisation…', true);
+    setTimeout(hardRefreshAfterInstall, 900);
   });
 
   window.addEventListener('DOMContentLoaded', () => {
     const button = qs('installGateBtn');
     if (button) button.addEventListener('click', async () => {
-      if (isInstalledLaunch()) {
-        hideGate();
-        return;
-      }
-
-      if (state.installCompleted) {
-        refreshAndOpenInstalledApp();
-        return;
-      }
-
-      if (isIOS()) {
-        showIOSHelp();
-        return;
-      }
-
+      if (isInstalledLaunch()) return hideGate();
+      if (state.installCompleted) return openInstalledApp();
+      if (isIOS()) return showIOSHelp();
       if (!state.deferredPrompt) {
         if (state.installRequested && remainingPreparationSeconds() <= 0) showManualHelp();
         else beginPreparation();
         return;
       }
-
       const promptEvent = state.deferredPrompt;
       state.deferredPrompt = null;
       setButton('Installation…', true);
@@ -256,21 +222,19 @@
         await promptEvent.prompt();
         const choice = await promptEvent.userChoice;
         if (choice?.outcome === 'accepted') {
-          setStatus('Installation en cours', 'Attends la confirmation de ton appareil. Le bouton d’ouverture apparaîtra dès que l’installation sera terminée.', 'installing');
+          setStatus('Installation en cours', 'Attends la confirmation de ton appareil. La page s’actualisera automatiquement ensuite.', 'installing');
           setButton('Installation en cours…', true);
         } else {
-          setStatus('Installation annulée', 'L’installation a été annulée. Tu peux réessayer lorsqu’elle sera de nouveau proposée.', 'cancelled');
-          setButton('Préparer à nouveau', false);
           state.installRequested = false;
+          setStatus('Installation annulée', 'Tu peux relancer l’installation.', 'cancelled');
+          setButton('Préparer à nouveau', false);
         }
       } catch (error) {
         console.debug('[Snake2 install] prompt error', error?.message || error);
         showManualHelp();
       }
     });
-
     refreshGate();
-    attemptOpenAfterRefresh();
   });
 
   document.addEventListener('visibilitychange', () => {
@@ -284,10 +248,7 @@
   } catch (_) {}
 
   window.__SNAKE_INSTALL_GATE__ = {
-    afterSplash() {
-      state.splashFinished = true;
-      refreshGate();
-    },
+    afterSplash() { state.splashFinished = true; refreshGate(); },
     refresh: refreshGate,
     isInstalledLaunch
   };
