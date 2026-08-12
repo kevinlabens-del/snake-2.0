@@ -32,7 +32,7 @@ jobs:
           test -f dist/index.html
           test -f dist/game.js
 
-      - name: Install corrected realtime statistics
+      - name: Install true realtime statistics
         shell: bash
         run: |
           set -euo pipefail
@@ -45,10 +45,8 @@ jobs:
           game = Path('dist/game.js')
           game_js = game.read_text(encoding='utf-8')
 
-          # Never count a level merely because it starts.
           game_js = game_js.replace("    save.gamesPlayed++;\n    window.snake2TrackGameStart?.();", "    save.gamesPlayed++;")
 
-          # Count exactly once when completeLevel() validates a successful level.
           completion_needle = "    state.levelComplete = true; state.running = false;\n    recordMissionOutcome(true, snapshot);"
           completion_hook = "    state.levelComplete = true; state.running = false;\n    window.snake2TrackGameStart?.();\n    recordMissionOutcome(true, snapshot);"
           if 'state.levelComplete = true; state.running = false;\n    window.snake2TrackGameStart?.();' not in game_js:
@@ -59,21 +57,22 @@ jobs:
 
           index = Path('dist/index.html')
           html = index.read_text(encoding='utf-8')
+          html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"></script>\s*', '', html)
           html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
-          html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+)?', 'game.js?v=2.2.5-stats3', html)
-          marker = '<script src="./snake2-stats.js?v=20260812f" defer></script>'
+          html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+)?', 'game.js?v=2.2.5-stats4', html)
+          scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>\n  <script src="./snake2-stats.js?v=20260812g" defer></script>'
           low = html.lower()
           if '</body>' in low:
               pos = low.rfind('</body>')
-              html = html[:pos] + '  ' + marker + '\n' + html[pos:]
+              html = html[:pos] + '  ' + scripts + '\n' + html[pos:]
           else:
-              html += '\n' + marker + '\n'
+              html += '\n' + scripts + '\n'
           index.write_text(html, encoding='utf-8')
 
           sw = Path('dist/sw.js')
           if sw.exists():
               text = sw.read_text(encoding='utf-8')
-              text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.5[^']*';", "const CACHE = 'snake-2.0-v2.2.5-stats-20260812f';", text, count=1)
+              text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.5[^']*';", "const CACHE = 'snake-2.0-v2.2.5-stats-20260812g';", text, count=1)
               if "'./snake2-stats.js'" not in text:
                   text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
               sw.write_text(text, encoding='utf-8')
@@ -81,11 +80,12 @@ jobs:
 
           grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackGameStart'
           ! grep -A1 'save.gamesPlayed++;' dist/game.js | grep -q 'window.snake2TrackGameStart'
-          grep -q 'game.js?v=2.2.5-stats3' dist/index.html
-          grep -q 'snake2-stats.js?v=20260812f' dist/index.html
-          grep -q 'stats-20260812f' dist/sw.js
-          grep -q 'p_visitor_id' dist/snake2-stats.js
-          grep -q 'HEARTBEAT_MS = 4000' dist/snake2-stats.js
+          grep -q 'game.js?v=2.2.5-stats4' dist/index.html
+          grep -q 'cdn.jsdelivr.net/npm/@supabase/supabase-js@2' dist/index.html
+          grep -q 'snake2-stats.js?v=20260812g' dist/index.html
+          grep -q 'stats-20260812g' dist/sw.js
+          grep -q "presenceState" dist/snake2-stats.js
+          grep -q "postgres_changes" dist/snake2-stats.js
           touch dist/.nojekyll
 
       - name: Configure GitHub Pages
