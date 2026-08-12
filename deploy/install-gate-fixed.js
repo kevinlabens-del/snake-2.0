@@ -48,6 +48,10 @@
     button.disabled = disabled;
   }
 
+  function setInstallButton() {
+    setButton('Installer Snake 2.0', false);
+  }
+
   function setHelp(html = '') {
     const help = qs('installGateHelp');
     if (!help) return;
@@ -91,7 +95,7 @@
   function showIOSHelp() {
     showRefreshButton(false);
     setStatus('Installer Snake 2.0', 'Sur iPhone et iPad, l’installation se fait depuis le menu Partager de Safari.', 'ios');
-    setButton('Voir les étapes iPhone', false);
+    setInstallButton();
     setHelp('<strong>Installation sur iPhone / iPad</strong><span>1. Ouvre cette page dans Safari.</span><span>2. Appuie sur Partager ⤴︎.</span><span>3. Choisis « Sur l’écran d’accueil » puis « Ajouter ».</span><span>4. Lance Snake 2.0 depuis sa nouvelle icône.</span>');
   }
 
@@ -100,8 +104,8 @@
     const device = isAndroid()
       ? '<span>Android : menu ⋮ → « Installer l’application » ou « Ajouter à l’écran d’accueil ».</span>'
       : '<span>Menu du navigateur → « Installer l’application » ou « Ajouter à l’écran d’accueil ».</span>';
-    setStatus('Installation via le navigateur', 'L’invite automatique n’est pas disponible. Utilise le menu du navigateur.', 'manual');
-    setButton('Afficher les instructions', false);
+    setStatus('Installation via le navigateur', 'L’invite automatique n’est pas encore disponible. Le bouton Installer reste accessible et tu peux aussi utiliser le menu du navigateur.', 'manual');
+    setInstallButton();
     setHelp('<strong>Installation manuelle</strong>' + device + '<span>Après installation, lance Snake 2.0 depuis son icône.</span>');
   }
 
@@ -142,8 +146,8 @@
     const remaining = remainingPreparationSeconds();
     if (remaining > 0) {
       showRefreshButton(false);
-      setStatus('Préparation de l’installation', `Chrome prépare l’installation${state.swReady ? '' : ' · vérification de l’application'}. Reste sur cette page encore ${remaining} s environ.`, 'preparing');
-      setButton(`Préparation… ${remaining} s`, true);
+      setStatus('Préparation de l’installation', `Chrome prépare l’installation${state.swReady ? '' : ' · vérification de l’application'}. L’installation sera proposée automatiquement dès que Chrome sera prêt (${remaining} s environ).`, 'preparing');
+      setInstallButton();
     } else {
       clearInterval(state.preparationTimer);
       state.preparationTimer = null;
@@ -176,13 +180,13 @@
     if (state.deferredPrompt) {
       setHelp('');
       setStatus('Snake 2.0 est prêt', 'L’installation est prête. Appuie sur le bouton ci-dessous pour confirmer.', 'ready');
-      setButton('Installer maintenant', false);
+      setInstallButton();
       return;
     }
     if (state.installRequested) return updatePreparation();
-    setStatus('Installe Snake 2.0', 'Prépare l’installation de l’application sur cet appareil.', 'waiting');
-    setButton('Préparer l’installation', false);
-    setHelp('<strong>Installation requise</strong><span>Le bouton d’ouverture n’apparaîtra qu’après confirmation réelle de l’installation par le navigateur.</span>');
+    setStatus('Installe Snake 2.0', 'Installe l’application sur cet appareil pour lancer le jeu dans son mode dédié.', 'waiting');
+    setInstallButton();
+    setHelp('<strong>Installation requise</strong><span>Le bouton Installer reste disponible tant que le navigateur n’a pas confirmé l’installation.</span>');
   }
 
   function refreshAndLaunch() {
@@ -270,20 +274,21 @@
         else beginPreparation();
         return;
       }
+      state.installRequested = true;
       const promptEvent = state.deferredPrompt;
       state.deferredPrompt = null;
-      setButton('Installation…', true);
+      setInstallButton();
       setHelp('');
       try {
         await promptEvent.prompt();
         const choice = await promptEvent.userChoice;
         if (choice?.outcome === 'accepted') {
-          setStatus('Installation en cours', 'Attends la confirmation réelle de ton appareil. Le bouton Rafraîchir apparaîtra uniquement lorsque l’installation sera terminée.', 'installing');
-          setButton('Installation en cours…', true);
+          setStatus('Installation en cours', 'Attends la confirmation réelle de ton appareil. Le bouton Installer restera disponible jusqu’à la confirmation finale.', 'installing');
+          setInstallButton();
         } else {
           state.installRequested = false;
-          setStatus('Installation annulée', 'Tu peux relancer l’installation.', 'cancelled');
-          setButton('Préparer à nouveau', false);
+          setStatus('Installation annulée', 'Tu peux relancer l’installation immédiatement.', 'cancelled');
+          setInstallButton();
         }
       } catch (error) {
         console.debug('[Snake2 install] prompt error', error?.message || error);
