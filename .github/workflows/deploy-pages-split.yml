@@ -30,8 +30,9 @@ jobs:
           mkdir -p dist
           unzip -q Snake-2.0-V2.2.5-SPCK.zip -d dist
           test -f dist/index.html
+          test -f dist/game.js
 
-      - name: Add live game statistics and bust PWA cache
+      - name: Add reliable live game statistics and bust PWA cache
         shell: bash
         run: |
           set -euo pipefail
@@ -40,14 +41,27 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
+          # Hook the counter to the real game start, not to button text.
+          game = Path('dist/game.js')
+          game_js = game.read_text(encoding='utf-8')
+          needle = '    save.gamesPlayed++;'
+          hook = "    save.gamesPlayed++;\n    window.snake2TrackGameStart?.();"
+          if 'window.snake2TrackGameStart?.();' not in game_js:
+              if needle not in game_js:
+                  raise SystemExit('Could not find real game start counter in game.js')
+              game_js = game_js.replace(needle, hook, 1)
+          game.write_text(game_js, encoding='utf-8')
+
           index = Path('dist/index.html')
           html = index.read_text(encoding='utf-8')
           for old in [
               '<script src="./snake2-stats.js" defer></script>',
-              '<script src="./snake2-stats.js?v=20260812b" defer></script>'
+              '<script src="./snake2-stats.js?v=20260812b" defer></script>',
+              '<script src="./snake2-stats.js?v=20260812c" defer></script>'
           ]:
               html = html.replace(old, '')
-          marker = '<script src="./snake2-stats.js?v=20260812c" defer></script>'
+          html = html.replace('game.js?v=2.2.5', 'game.js?v=2.2.5-stats1')
+          marker = '<script src="./snake2-stats.js?v=20260812d" defer></script>'
           low = html.lower()
           if '</body>' in low:
               pos = low.rfind('</body>')
@@ -59,15 +73,16 @@ jobs:
           sw = Path('dist/sw.js')
           if sw.exists():
               text = sw.read_text(encoding='utf-8')
-              text = text.replace("const CACHE = 'snake-2.0-v2.2.5-fast-installed-start';", "const CACHE = 'snake-2.0-v2.2.5-stats-20260812c';")
+              text = text.replace("const CACHE = 'snake-2.0-v2.2.5-fast-installed-start';", "const CACHE = 'snake-2.0-v2.2.5-stats-20260812d';")
               if "'./snake2-stats.js'" not in text:
                   text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
               sw.write_text(text, encoding='utf-8')
           PY
 
-          test -f dist/snake2-stats.js
-          grep -q 'snake2-stats.js?v=20260812c' dist/index.html
-          grep -q 'stats-20260812c' dist/sw.js
+          grep -q 'window.snake2TrackGameStart' dist/game.js
+          grep -q 'game.js?v=2.2.5-stats1' dist/index.html
+          grep -q 'snake2-stats.js?v=20260812d' dist/index.html
+          grep -q 'stats-20260812d' dist/sw.js
           touch dist/.nojekyll
 
       - name: Configure GitHub Pages
