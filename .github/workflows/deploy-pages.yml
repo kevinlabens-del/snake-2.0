@@ -1,8 +1,6 @@
-name: Deploy Snake 2.0 to GitHub Pages
+name: Deploy Snake 2.0 to GitHub Pages (legacy)
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -11,7 +9,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-legacy
   cancel-in-progress: true
 
 jobs:
@@ -31,7 +29,7 @@ jobs:
           set -euo pipefail
           ZIP=$(find . -maxdepth 1 -type f -iname 'Snake-2.0-*.zip' | sort | tail -n 1)
           if [ -z "$ZIP" ]; then
-            echo "Aucun ZIP Snake-2.0 trouvé à la racine du dépôt."
+            echo "Aucun ZIP Snake-2.0 trouvé à la racine du dépôt. Utiliser le workflow split."
             exit 1
           fi
           echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
