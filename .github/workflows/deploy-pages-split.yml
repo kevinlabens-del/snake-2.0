@@ -32,7 +32,7 @@ jobs:
           test -f dist/index.html
           test -f dist/game.js
 
-      - name: Count completed levels and bust PWA cache
+      - name: Install corrected realtime statistics
         shell: bash
         run: |
           set -euo pipefail
@@ -40,15 +40,15 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          # One online "partie" = one successfully completed level.
-          # Hook exactly once inside completeLevel(), after the guard has fired.
           game = Path('dist/game.js')
           game_js = game.read_text(encoding='utf-8')
 
-          # Remove the previous start-based hook if present.
+          # Never count a level merely because it starts.
           game_js = game_js.replace("    save.gamesPlayed++;\n    window.snake2TrackGameStart?.();", "    save.gamesPlayed++;")
 
+          # Count exactly once when completeLevel() validates a successful level.
           completion_needle = "    state.levelComplete = true; state.running = false;\n    recordMissionOutcome(true, snapshot);"
           completion_hook = "    state.levelComplete = true; state.running = false;\n    window.snake2TrackGameStart?.();\n    recordMissionOutcome(true, snapshot);"
           if 'state.levelComplete = true; state.running = false;\n    window.snake2TrackGameStart?.();' not in game_js:
@@ -59,16 +59,9 @@ jobs:
 
           index = Path('dist/index.html')
           html = index.read_text(encoding='utf-8')
-          for old in [
-              '<script src="./snake2-stats.js" defer></script>',
-              '<script src="./snake2-stats.js?v=20260812b" defer></script>',
-              '<script src="./snake2-stats.js?v=20260812c" defer></script>',
-              '<script src="./snake2-stats.js?v=20260812d" defer></script>'
-          ]:
-              html = html.replace(old, '')
-          html = html.replace('game.js?v=2.2.5-stats1', 'game.js?v=2.2.5-stats2')
-          html = html.replace('game.js?v=2.2.5', 'game.js?v=2.2.5-stats2')
-          marker = '<script src="./snake2-stats.js?v=20260812e" defer></script>'
+          html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
+          html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+)?', 'game.js?v=2.2.5-stats3', html)
+          marker = '<script src="./snake2-stats.js?v=20260812f" defer></script>'
           low = html.lower()
           if '</body>' in low:
               pos = low.rfind('</body>')
@@ -80,19 +73,19 @@ jobs:
           sw = Path('dist/sw.js')
           if sw.exists():
               text = sw.read_text(encoding='utf-8')
-              import re
-              text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.5[^']*';", "const CACHE = 'snake-2.0-v2.2.5-stats-20260812e';", text, count=1)
+              text = re.sub(r"const CACHE = 'snake-2\.0-v2\.2\.5[^']*';", "const CACHE = 'snake-2.0-v2.2.5-stats-20260812f';", text, count=1)
               if "'./snake2-stats.js'" not in text:
                   text = text.replace("const CORE_ASSETS = [", "const CORE_ASSETS = [\n  './snake2-stats.js',")
               sw.write_text(text, encoding='utf-8')
           PY
 
-          # Verification: hook must be in completeLevel and absent from the launch counter.
           grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackGameStart'
           ! grep -A1 'save.gamesPlayed++;' dist/game.js | grep -q 'window.snake2TrackGameStart'
-          grep -q 'game.js?v=2.2.5-stats2' dist/index.html
-          grep -q 'snake2-stats.js?v=20260812e' dist/index.html
-          grep -q 'stats-20260812e' dist/sw.js
+          grep -q 'game.js?v=2.2.5-stats3' dist/index.html
+          grep -q 'snake2-stats.js?v=20260812f' dist/index.html
+          grep -q 'stats-20260812f' dist/sw.js
+          grep -q 'p_visitor_id' dist/snake2-stats.js
+          grep -q 'HEARTBEAT_MS = 4000' dist/snake2-stats.js
           touch dist/.nojekyll
 
       - name: Configure GitHub Pages
