@@ -71,7 +71,7 @@ html = index.read_text(encoding='utf-8')
 html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
 html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+|-headsweep\d+)?', 'game.js?v=2.2.5-headsweep2', html)
-html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install13', html)
+html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install14', html)
 scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
@@ -84,6 +84,8 @@ persist_boot = """
   const INSTALL_CONFIRM_KEY = 'snake2_install_confirmed_v4';
   const AUTO_LAUNCH_GUARD_KEY = 'snake2_auto_launch_guard_v2';
   const AUTO_LAUNCH_GUARD_MS = 60000;
+  const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_visual_v17';
+  const HAD_SW_CONTROLLER_AT_BOOT = Boolean(navigator.serviceWorker?.controller);
   let persistedInstallConfirmedAt = 0;
   try {
     const raw = Number(localStorage.getItem(INSTALL_CONFIRM_KEY) || 0);
@@ -103,7 +105,7 @@ state_marker = "    swReady: false,\n    startedAt: performance.now()"
 if 'navigationInProgress: false' not in install_text:
     if state_marker not in install_text:
         raise SystemExit('navigation state marker missing')
-    install_text = install_text.replace(state_marker, "    swReady: false,\n    navigationInProgress: false,\n    autoLaunchAttempted: false,\n    startedAt: performance.now()", 1)
+    install_text = install_text.replace(state_marker, "    swReady: false,\n    navigationInProgress: false,\n    autoLaunchAttempted: false,\n    swUpdateReloaded: false,\n    startedAt: performance.now()", 1)
 
 install_text = install_text.replace("    button = document.createElement('button');\n    button.id = 'installRefreshBtn';\n    button.type = 'button';", "    button = document.createElement('a');\n    button.id = 'installRefreshBtn';\n    button.href = './';\n    button.target = '_blank';\n    button.rel = 'noopener';\n    button.setAttribute('role', 'button');", 1)
 
@@ -271,7 +273,28 @@ if boot_marker not in install_text:
 if "scheduleAutomaticRefreshAndLaunch('browser', 0);" not in install_text:
     install_text = install_text.replace(boot_marker, boot_replacement, 1)
 
-install_text = re.sub(r"serviceWorker\.register\('\./sw\.js\?v=2\.2\.6-install\d+'", "serviceWorker.register('./sw.js?v=2.2.6-install13'", install_text, count=1)
+sw_reload_marker = "  if ('serviceWorker' in navigator) {"
+sw_reload_listener = """  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!HAD_SW_CONTROLLER_AT_BOOT || state.navigationInProgress) return;
+      try {
+        if (sessionStorage.getItem(SW_UPDATE_RELOAD_KEY) === '1') return;
+        sessionStorage.setItem(SW_UPDATE_RELOAD_KEY, '1');
+      } catch (_) {
+        if (state.swUpdateReloaded) return;
+        state.swUpdateReloaded = true;
+      }
+      location.reload();
+    });
+  }
+
+  if ('serviceWorker' in navigator) {"""
+if "navigator.serviceWorker.addEventListener('controllerchange'" not in install_text:
+    if sw_reload_marker not in install_text:
+        raise SystemExit('service-worker registration marker missing')
+    install_text = install_text.replace(sw_reload_marker, sw_reload_listener, 1)
+
+install_text = re.sub(r"serviceWorker\.register\('\./sw\.js\?v=2\.2\.6-install\d+'", "serviceWorker.register('./sw.js?v=2.2.6-install14'", install_text, count=1)
 install_gate.write_text(install_text, encoding='utf-8')
 
 manifest_path = Path('dist/manifest.webmanifest')
@@ -319,7 +342,7 @@ async function networkFirstCritical(request) {
         text = text.replace("self.addEventListener('fetch', event => {", critical_fn + "self.addEventListener('fetch', event => {")
 
     old_respond = "event.respondWith(request.mode === 'navigate' ? navigationFastStart(request) : (isAudio ? audioResponse(request) : staleWhileRevalidate(request)));"
-    new_respond = """const isInstallGate = /\/install-gate-v225\.js$/i.test(url.pathname);
+    new_respond = r"""const isInstallGate = /\/install-gate-v225\.js$/i.test(url.pathname);
   event.respondWith(
     request.mode === 'navigate'
       ? navigationFastStart(request)

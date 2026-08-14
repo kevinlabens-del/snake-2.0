@@ -97,12 +97,13 @@ jobs:
           grep -q 'if (points.length <= 48)' dist/game.js
 
           # Obstacles and portals are visually larger while collision cells remain unchanged.
-          grep -q 'const hazardVisualSize = cell \* 1.02' dist/game.js
-          grep -q 'const obstacleVisualSize = cell \* 1.10' dist/game.js
-          grep -q 'const lockedPortalVisualSize = cell \* 1.16' dist/game.js
-          grep -q 'const portalVisualSize = cell \* 1.18 \* pulse' dist/game.js
-          grep -q 'drawImageContain(sprite, x, y, obstacleVisualSize, obstacleVisualSize)' dist/game.js
-          grep -q 'drawImageContain(sprite, x, y, portalVisualSize, portalVisualSize)' dist/game.js
+          grep -q 'function drawImageContainCropped' dist/game.js
+          grep -q 'const hazardVisualSize = cell \* 1.20' dist/game.js
+          grep -q 'const obstacleVisualSize = cell \* 1.40' dist/game.js
+          grep -q 'const lockedPortalVisualSize = cell \* 1.50' dist/game.js
+          grep -q 'const portalVisualSize = cell \* 1.62 \* pulse' dist/game.js
+          grep -q 'drawImageContainCropped(sprite, x, y, obstacleVisualSize, obstacleVisualSize)' dist/game.js
+          grep -q 'drawImageContainCropped(sprite, x, y, portalVisualSize, portalVisualSize)' dist/game.js
 
           # Android browser flow performs at most one same-tab handoff and cannot spawn recursive tabs.
           grep -q "window.addEventListener('appinstalled'" dist/install-gate-v225.js
@@ -120,6 +121,10 @@ jobs:
           grep -q 'navigator.getInstalledRelatedApps' dist/install-gate-v225.js
           grep -q 'localStorage.getItem(AUTO_LAUNCH_GUARD_KEY)' dist/install-gate-v225.js
           grep -q 'localStorage.setItem(AUTO_LAUNCH_GUARD_KEY' dist/install-gate-v225.js
+          grep -q "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_visual_v17'" dist/install-gate-v225.js
+          grep -q 'const HAD_SW_CONTROLLER_AT_BOOT = Boolean(navigator.serviceWorker?.controller)' dist/install-gate-v225.js
+          grep -q "navigator.serviceWorker.addEventListener('controllerchange'" dist/install-gate-v225.js
+          grep -q 'sessionStorage.setItem(SW_UPDATE_RELOAD_KEY' dist/install-gate-v225.js
           grep -q "launchUrl.searchParams.set('handoff', '1')" dist/install-gate-v225.js
           grep -q 'location.replace(launchUrl.href)' dist/install-gate-v225.js
           ! grep -q 'sessionStorage.*AUTO_LAUNCH_GUARD_KEY' dist/install-gate-v225.js
@@ -131,14 +136,14 @@ jobs:
           ! grep -q 'play.click()' dist/install-gate-v225.js
 
           # Force installed devices and browsers to receive corrected gameplay logic.
-          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install13'" dist/install-gate-v225.js
-          grep -q 'install-gate-v225.js?v=2.2.6-install13' dist/index.html
-          grep -q 'game.js?v=2.2.5-visual-size1' dist/index.html
+          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install14'" dist/install-gate-v225.js
+          grep -q 'install-gate-v225.js?v=2.2.6-install14' dist/index.html
+          grep -q 'game.js?v=2.2.5-visual-size2' dist/index.html
           grep -q 'apple-snake-levels.js?v=2.2.5-missedlife1' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-larger-obstacles-portals-20260814-v16' dist/sw.js
+          grep -q 'snake-2.0-v2.2.6-larger-obstacles-portals-20260814-v17' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
-          grep -q 'isInstallGate' dist/sw.js
+          grep -q 'isCriticalRuntime' dist/sw.js
           grep -q 'manifest.webmanifest' dist/index.html
 
           node --check dist/install-gate-v225.js

@@ -5,13 +5,48 @@ import re
 game_path = Path('dist/game.js')
 game = game_path.read_text(encoding='utf-8')
 
+draw_contain_marker = """  function drawImageContain(img, x, y, w, h) {
+    if (!img) return;
+    const iw = img.naturalWidth || img.width || w;
+    const ih = img.naturalHeight || img.height || h;
+    const scale = Math.min(w / iw, h / ih);
+    const dw = iw * scale;
+    const dh = ih * scale;
+    const dx = x + (w - dw) / 2;
+    const dy = y + (h - dh) / 2;
+    ctx.drawImage(img, dx, dy, dw, dh);
+  }
+"""
+draw_cropped_helper = draw_contain_marker + """
+
+  function drawImageContainCropped(img, x, y, w, h, cropRatio = .0625) {
+    if (!img) return;
+    const iw = img.naturalWidth || img.width || w;
+    const ih = img.naturalHeight || img.height || h;
+    const cropX = iw * cropRatio;
+    const cropY = ih * cropRatio;
+    const sourceW = Math.max(1, iw - cropX * 2);
+    const sourceH = Math.max(1, ih - cropY * 2);
+    const scale = Math.min(w / sourceW, h / sourceH);
+    const dw = sourceW * scale;
+    const dh = sourceH * scale;
+    const dx = x + (w - dw) / 2;
+    const dy = y + (h - dh) / 2;
+    ctx.drawImage(img, cropX, cropY, sourceW, sourceH, dx, dy, dw, dh);
+  }
+"""
+if 'function drawImageContainCropped(' not in game:
+    if draw_contain_marker not in game:
+        raise SystemExit('image contain helper missing')
+    game = game.replace(draw_contain_marker, draw_cropped_helper, 1)
+
 old_hazard_wave = """          const sprite = assets.danger02 || assets.trap02; const px = x * cell + 3, py = wave.row * cell + 3;
           if (sprite) drawImageContain(sprite, px, py, cell - 6, cell - 6); else { ctx.fillStyle='rgba(255,73,91,.62)'; ctx.fillRect(px,py,cell-6,cell-6); }"""
 new_hazard_wave = """          const sprite = assets.danger02 || assets.trap02;
-          const hazardVisualSize = cell * 1.02;
+          const hazardVisualSize = cell * 1.20;
           const px = x * cell + (cell - hazardVisualSize) / 2;
           const py = wave.row * cell + (cell - hazardVisualSize) / 2;
-          if (sprite) drawImageContain(sprite, px, py, hazardVisualSize, hazardVisualSize);
+          if (sprite) drawImageContainCropped(sprite, px, py, hazardVisualSize, hazardVisualSize);
           else { ctx.fillStyle='rgba(255,73,91,.62)'; ctx.fillRect(px, py, hazardVisualSize, hazardVisualSize); }"""
 if old_hazard_wave not in game:
     raise SystemExit('hazard-wave visual block missing')
@@ -45,16 +80,16 @@ old_obstacles = """    for (const o of state.obstacles) {
       ctx.restore();
     }"""
 new_obstacles = """    for (const o of state.obstacles) {
-      const obstacleVisualSize = cell * 1.10;
+      const obstacleVisualSize = cell * 1.40;
       const x = o.x * cell + (cell - obstacleVisualSize) / 2;
       const y = o.y * cell + (cell - obstacleVisualSize) / 2;
       const spriteKey = o.visualKey || obstacleVisualFor(settings, { moving: !!o.moving, dynamicWall: !!o.dynamicWall, collapsedTile: !!o.collapsedTile, index: o.x + o.y * cells });
       const sprite = assets[spriteKey];
       ctx.save();
       if (sprite) {
-        ctx.shadowBlur = o.moving ? 10 : 6;
-        ctx.shadowColor = o.moving ? 'rgba(255,76,94,.38)' : 'rgba(0,0,0,.24)';
-        drawImageContain(sprite, x, y, obstacleVisualSize, obstacleVisualSize);
+        ctx.shadowBlur = o.moving ? 16 : 11;
+        ctx.shadowColor = o.moving ? 'rgba(255,76,94,.62)' : 'rgba(0,0,0,.62)';
+        drawImageContainCropped(sprite, x, y, obstacleVisualSize, obstacleVisualSize);
         if (o.moving) {
           ctx.shadowBlur = 0;
           ctx.strokeStyle = 'rgba(255,91,108,.42)';
@@ -86,13 +121,15 @@ old_locked_portal = """    if (state.lockedPortal) {
       ctx.restore();
     }"""
 new_locked_portal = """    if (state.lockedPortal) {
-      const lockedPortalVisualSize = cell * 1.16;
+      const lockedPortalVisualSize = cell * 1.50;
       const x = state.lockedPortal.x * cell + (cell - lockedPortalVisualSize) / 2;
       const y = state.lockedPortal.y * cell + (cell - lockedPortalVisualSize) / 2;
       const sprite = assets.portalLocked;
       ctx.save(); ctx.globalAlpha = .72 + Math.sin(time * .004) * .10;
-      if (sprite) drawImageContain(sprite, x, y, lockedPortalVisualSize, lockedPortalVisualSize);
-      else {
+      if (sprite) {
+        ctx.shadowBlur = 16; ctx.shadowColor = 'rgba(255,205,76,.58)';
+        drawImageContainCropped(sprite, x, y, lockedPortalVisualSize, lockedPortalVisualSize);
+      } else {
         const cx = state.lockedPortal.x * cell + cell / 2;
         const cy = state.lockedPortal.y * cell + cell / 2;
         ctx.strokeStyle='rgba(170,185,175,.7)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy,cell*.43,0,Math.PI*2); ctx.stroke();
@@ -128,7 +165,7 @@ old_portal_loop = """    for (const portal of portalsToDraw) {
     }"""
 new_portal_loop = """    for (const portal of portalsToDraw) {
       const pulse = 1 + Math.sin(time * .008 + portal.x) * .08;
-      const portalVisualSize = cell * 1.18 * pulse;
+      const portalVisualSize = cell * 1.62 * pulse;
       const cx = portal.x * cell + cell / 2;
       const cy = portal.y * cell + cell / 2;
       const x = cx - portalVisualSize / 2;
@@ -138,7 +175,9 @@ new_portal_loop = """    for (const portal of portalsToDraw) {
       ctx.save();
       ctx.globalAlpha = portal.correct === false ? .86 : 1;
       if (sprite) {
-        drawImageContain(sprite, x, y, portalVisualSize, portalVisualSize);
+        ctx.shadowBlur = portal.correct === false ? 18 : 22;
+        ctx.shadowColor = portal.correct === false ? 'rgba(255,105,39,.74)' : 'rgba(53,209,255,.82)';
+        drawImageContainCropped(sprite, x, y, portalVisualSize, portalVisualSize);
       } else {
         const hue = {green:110,blue:215,red:350,purple:285,gold:45}[portal.color] ?? 110;
         ctx.translate(cx, cy); ctx.scale(pulse, pulse);
@@ -159,7 +198,7 @@ game_path.write_text(game, encoding='utf-8')
 
 index_path = Path('dist/index.html')
 index = index_path.read_text(encoding='utf-8')
-index = re.sub(r'game\.js\?v=[^"\']+', 'game.js?v=2.2.5-visual-size1', index)
+index = re.sub(r'game\.js\?v=[^"\']+', 'game.js?v=2.2.5-visual-size2', index)
 index_path.write_text(index, encoding='utf-8')
 
 
@@ -167,8 +206,25 @@ sw_path = Path('dist/sw.js')
 sw = sw_path.read_text(encoding='utf-8')
 sw = re.sub(
     r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';",
-    "const CACHE = 'snake-2.0-v2.2.6-larger-obstacles-portals-20260814-v16';",
+    "const CACHE = 'snake-2.0-v2.2.6-larger-obstacles-portals-20260814-v17';",
     sw,
     count=1,
 )
+
+old_runtime_route = r"""  const isInstallGate = /\/install-gate-v225\.js$/i.test(url.pathname);
+  event.respondWith(
+    request.mode === 'navigate'
+      ? navigationFastStart(request)
+      : (isAudio ? audioResponse(request) : (isInstallGate ? networkFirstCritical(request) : staleWhileRevalidate(request)))
+  );"""
+new_runtime_route = r"""  const isCriticalRuntime = /\/(?:install-gate-v225|game|apple-snake-levels)\.js$/i.test(url.pathname);
+  event.respondWith(
+    request.mode === 'navigate'
+      ? navigationFastStart(request)
+      : (isAudio ? audioResponse(request) : (isCriticalRuntime ? networkFirstCritical(request) : staleWhileRevalidate(request)))
+  );"""
+if old_runtime_route in sw:
+    sw = sw.replace(old_runtime_route, new_runtime_route, 1)
+elif 'isCriticalRuntime' not in sw:
+    raise SystemExit('service-worker runtime route missing')
 sw_path.write_text(sw, encoding='utf-8')
