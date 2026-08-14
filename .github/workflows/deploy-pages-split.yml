@@ -73,7 +73,9 @@ jobs:
 
           grep -q 'catchUpSteps < 5' dist/game.js
           grep -q 'bodySpineGradient' dist/game.js
-          grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackGameStart'
+          grep -A4 -B2 'state.mission = snapshot.mission;' dist/game.js | grep -q 'window.snake2TrackLevelStart'
+          grep -A4 -B2 'state.levelComplete = true; state.running = false;' dist/game.js | grep -q 'window.snake2TrackLevelComplete'
+          grep -A4 -B2 'state.gameOver = true;' dist/game.js | grep -q 'window.snake2TrackLevelEnd'
 
           # Timed accuracy missions now consume lives instead of ending while lives remain.
           grep -q "const timedAccuracy = state.mission?.missionType === 'accuracy'" dist/game.js
@@ -131,7 +133,7 @@ jobs:
           grep -q 'navigator.getInstalledRelatedApps' dist/install-gate-v225.js
           grep -q 'localStorage.getItem(AUTO_LAUNCH_GUARD_KEY)' dist/install-gate-v225.js
           grep -q 'localStorage.setItem(AUTO_LAUNCH_GUARD_KEY' dist/install-gate-v225.js
-          grep -q "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_next_mission_v18'" dist/install-gate-v225.js
+          grep -q "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_stats_secure_v19'" dist/install-gate-v225.js
           grep -q 'const HAD_SW_CONTROLLER_AT_BOOT = Boolean(navigator.serviceWorker?.controller)' dist/install-gate-v225.js
           grep -q "navigator.serviceWorker.addEventListener('controllerchange'" dist/install-gate-v225.js
           grep -q 'sessionStorage.setItem(SW_UPDATE_RELOAD_KEY' dist/install-gate-v225.js
@@ -146,12 +148,12 @@ jobs:
           ! grep -q 'play.click()' dist/install-gate-v225.js
 
           # Force installed devices and browsers to receive corrected gameplay logic.
-          grep -q "serviceWorker.register('./sw.js?v=2.2.7-nextmission1'" dist/install-gate-v225.js
+          grep -q "serviceWorker.register('./sw.js?v=2.2.7-stats-secure1'" dist/install-gate-v225.js
           grep -q 'styles-v225.css?v=2.2.7-nextmission1' dist/index.html
           grep -q 'install-gate-v225.js?v=2.2.7-nextmission1' dist/index.html
           grep -q 'game.js?v=2.2.7-nextmission1' dist/index.html
           grep -q 'apple-snake-levels.js?v=2.2.5-missedlife1' dist/index.html
-          grep -q 'snake-2.0-v2.2.7-next-mission-preview-20260814-v18' dist/sw.js
+          grep -q 'snake-2.0-v2.2.7-secure-statistics-20260814-v19' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isCriticalRuntime' dist/sw.js
@@ -161,6 +163,8 @@ jobs:
           node --check dist/sw.js
           node --check dist/game.js
           node --check dist/apple-snake-levels.js
+          node --check dist/snake2-stats.js
+          node deploy/test-snake2-stats.mjs
           node - <<'NODE'
           const fs = require('node:fs');
           const manifest = JSON.parse(fs.readFileSync('./dist/manifest.webmanifest', 'utf8'));
@@ -190,8 +194,12 @@ jobs:
             assert.deepEqual(preview, launched, `La prévisualisation du niveau ${level} diffère de la mission lancée`);
           }
           NODE
-          grep -q 'snake2-stats.js?v=20260812h' dist/index.html
-          grep -q 'snake2-public-stats' dist/snake2-stats.js
+          grep -q '@supabase/supabase-js@2.112.3' dist/index.html
+          grep -q 'snake2-stats.js?v=20260814-stats-secure1' dist/index.html
+          grep -q 'snake2-public-stats-v2' dist/snake2-stats.js
+          grep -q 'snake2_level_completed' dist/snake2-stats.js
+          grep -q 'snake2_pending_completions_v2' dist/snake2-stats.js
+          grep -q 'const HEARTBEAT_MS = 15000' dist/snake2-stats.js
           touch dist/.nojekyll
 
       - name: Configure GitHub Pages

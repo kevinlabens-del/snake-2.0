@@ -5,12 +5,43 @@ game = Path('dist/game.js')
 js = game.read_text(encoding='utf-8')
 
 js = js.replace("    save.gamesPlayed++;\n    window.snake2TrackGameStart?.();", "    save.gamesPlayed++;")
-needle = "    state.levelComplete = true; state.running = false;\n    recordMissionOutcome(true, snapshot);"
-hook = "    state.levelComplete = true; state.running = false;\n    window.snake2TrackGameStart?.();\n    recordMissionOutcome(true, snapshot);"
-if 'state.levelComplete = true; state.running = false;\n    window.snake2TrackGameStart?.();' not in js:
-    if needle not in js:
-        raise SystemExit('completeLevel hook point missing')
-    js = js.replace(needle, hook, 1)
+
+start_needle = """      onMissionStart: snapshot => {
+        state.missionSnapshot = snapshot;
+        state.mission = snapshot.mission;
+        applyMissionSettings(snapshot.mission);
+"""
+start_hook = """      onMissionStart: snapshot => {
+        state.missionSnapshot = snapshot;
+        state.mission = snapshot.mission;
+        window.snake2TrackLevelStart?.({ level: state.level, daily: state.isDaily });
+        applyMissionSettings(snapshot.mission);
+"""
+if 'window.snake2TrackLevelStart?.({ level: state.level, daily: state.isDaily });' not in js:
+    if start_needle not in js:
+        raise SystemExit('level start statistics hook point missing')
+    js = js.replace(start_needle, start_hook, 1)
+
+complete_needle = "    state.levelComplete = true; state.running = false;\n    recordMissionOutcome(true, snapshot);"
+complete_hook = "    state.levelComplete = true; state.running = false;\n    window.snake2TrackLevelComplete?.({ level: state.level, daily: state.isDaily });\n    recordMissionOutcome(true, snapshot);"
+if 'window.snake2TrackLevelComplete?.({ level: state.level, daily: state.isDaily });' not in js:
+    if complete_needle not in js:
+        raise SystemExit('level completion statistics hook point missing')
+    js = js.replace(complete_needle, complete_hook, 1)
+
+abort_needle = "    state.outcomeRecorded = true;\n    if (state.isDaily) save.dailyAborts"
+abort_hook = "    state.outcomeRecorded = true;\n    window.snake2TrackLevelEnd?.();\n    if (state.isDaily) save.dailyAborts"
+if 'state.outcomeRecorded = true;\n    window.snake2TrackLevelEnd?.();\n    if (state.isDaily) save.dailyAborts' not in js:
+    if abort_needle not in js:
+        raise SystemExit('level abort statistics hook point missing')
+    js = js.replace(abort_needle, abort_hook, 1)
+
+loss_needle = "    state.running = false;\n    state.gameOver = true;\n    recordMissionOutcome(false, snapshot);"
+loss_hook = "    state.running = false;\n    state.gameOver = true;\n    window.snake2TrackLevelEnd?.();\n    recordMissionOutcome(false, snapshot);"
+if 'state.gameOver = true;\n    window.snake2TrackLevelEnd?.();\n    recordMissionOutcome(false, snapshot);' not in js:
+    if loss_needle not in js:
+        raise SystemExit('level loss statistics hook point missing')
+    js = js.replace(loss_needle, loss_hook, 1)
 
 old_loop = """      state.acc += dt * 1000;
       const dynamicStep = missionDynamicStep();
@@ -68,11 +99,11 @@ game.write_text(js, encoding='utf-8')
 
 index = Path('dist/index.html')
 html = index.read_text(encoding='utf-8')
-html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
+html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@[^\"]+"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
 html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+|-headsweep\d+)?', 'game.js?v=2.2.5-headsweep2', html)
 html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install14', html)
-scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
+scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3" defer></script>\n  <script src="./snake2-stats.js?v=20260814-stats-secure1" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
 index.write_text(html, encoding='utf-8')
