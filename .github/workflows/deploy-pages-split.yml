@@ -46,6 +46,7 @@ jobs:
           python3 deploy/patch-head-sway.py
           python3 deploy/patch-missed-apples.py
           python3 deploy/patch-visual-sizes.py
+          python3 deploy/patch-next-mission.py
 
           python3 - <<'PY'
           from pathlib import Path
@@ -105,6 +106,15 @@ jobs:
           grep -q 'drawImageContainCropped(sprite, x, y, obstacleVisualSize, obstacleVisualSize)' dist/game.js
           grep -q 'drawImageContainCropped(sprite, x, y, portalVisualSize, portalVisualSize)' dist/game.js
 
+          # A completed campaign level now previews the exact next mission and waits for JOUER.
+          grep -q 'const nextLevel = state.level + 1;' dist/game.js
+          grep -q 'const nextMission = Levels?.getMission?.(nextLevel' dist/game.js
+          grep -q 'PROCHAINE MISSION' dist/game.js
+          grep -q "\['JOUER', () =>" dist/game.js
+          grep -q 'launchLevel(nextLevel, false)' dist/game.js
+          ! grep -q "\['Niveau suivant', () =>" dist/game.js
+          grep -q '.next-mission-preview{' dist/styles-v225.css
+
           # Android browser flow performs at most one same-tab handoff and cannot spawn recursive tabs.
           grep -q "window.addEventListener('appinstalled'" dist/install-gate-v225.js
           grep -q "const INSTALL_CONFIRM_KEY = 'snake2_install_confirmed_v4'" dist/install-gate-v225.js
@@ -121,7 +131,7 @@ jobs:
           grep -q 'navigator.getInstalledRelatedApps' dist/install-gate-v225.js
           grep -q 'localStorage.getItem(AUTO_LAUNCH_GUARD_KEY)' dist/install-gate-v225.js
           grep -q 'localStorage.setItem(AUTO_LAUNCH_GUARD_KEY' dist/install-gate-v225.js
-          grep -q "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_visual_v17'" dist/install-gate-v225.js
+          grep -q "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_next_mission_v18'" dist/install-gate-v225.js
           grep -q 'const HAD_SW_CONTROLLER_AT_BOOT = Boolean(navigator.serviceWorker?.controller)' dist/install-gate-v225.js
           grep -q "navigator.serviceWorker.addEventListener('controllerchange'" dist/install-gate-v225.js
           grep -q 'sessionStorage.setItem(SW_UPDATE_RELOAD_KEY' dist/install-gate-v225.js
@@ -136,11 +146,12 @@ jobs:
           ! grep -q 'play.click()' dist/install-gate-v225.js
 
           # Force installed devices and browsers to receive corrected gameplay logic.
-          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install14'" dist/install-gate-v225.js
-          grep -q 'install-gate-v225.js?v=2.2.6-install14' dist/index.html
-          grep -q 'game.js?v=2.2.5-visual-size2' dist/index.html
+          grep -q "serviceWorker.register('./sw.js?v=2.2.7-nextmission1'" dist/install-gate-v225.js
+          grep -q 'styles-v225.css?v=2.2.7-nextmission1' dist/index.html
+          grep -q 'install-gate-v225.js?v=2.2.7-nextmission1' dist/index.html
+          grep -q 'game.js?v=2.2.7-nextmission1' dist/index.html
           grep -q 'apple-snake-levels.js?v=2.2.5-missedlife1' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-larger-obstacles-portals-20260814-v17' dist/sw.js
+          grep -q 'snake-2.0-v2.2.7-next-mission-preview-20260814-v18' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isCriticalRuntime' dist/sw.js
@@ -167,6 +178,17 @@ jobs:
           const missFail = mission.failConditions.find(c => c.metric === 'apples.missed');
           if (!missFail || Number(missFail.value) < 1) throw new Error('Level 15 still fails on the first missed apple');
           if (!String(mission.description).includes('manquée')) throw new Error('Accuracy rule is not visible in mission description');
+          NODE
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const Levels = require('./dist/apple-snake-levels.js');
+          const profile = { successRate: .68, deathRate: .22, streak: 4, averageScore: 180, averageCompletionSec: 42 };
+          for (const level of [2, 600, 601, 999]) {
+            const preview = Levels.getMission(level, profile, { adaptive: true, seed: level });
+            const engine = Levels.createEngine({ profile });
+            const launched = engine.startLevel(level, profile, { adaptive: true, seed: level }).mission;
+            assert.deepEqual(preview, launched, `La prévisualisation du niveau ${level} diffère de la mission lancée`);
+          }
           NODE
           grep -q 'snake2-stats.js?v=20260812h' dist/index.html
           grep -q 'snake2-public-stats' dist/snake2-stats.js
