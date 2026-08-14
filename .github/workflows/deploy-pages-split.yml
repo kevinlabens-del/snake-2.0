@@ -45,6 +45,7 @@ jobs:
           python3 deploy/patch-game.py
           python3 deploy/patch-head-sway.py
           python3 deploy/patch-missed-apples.py
+          python3 deploy/patch-visual-sizes.py
 
           python3 - <<'PY'
           from pathlib import Path
@@ -95,6 +96,14 @@ jobs:
           grep -q 'Math.ceil(Math.max(1, points.length - 2) / 13)' dist/game.js
           grep -q 'if (points.length <= 48)' dist/game.js
 
+          # Obstacles and portals are visually larger while collision cells remain unchanged.
+          grep -q 'const hazardVisualSize = cell \* 1.02' dist/game.js
+          grep -q 'const obstacleVisualSize = cell \* 1.10' dist/game.js
+          grep -q 'const lockedPortalVisualSize = cell \* 1.16' dist/game.js
+          grep -q 'const portalVisualSize = cell \* 1.18 \* pulse' dist/game.js
+          grep -q 'drawImageContain(sprite, x, y, obstacleVisualSize, obstacleVisualSize)' dist/game.js
+          grep -q 'drawImageContain(sprite, x, y, portalVisualSize, portalVisualSize)' dist/game.js
+
           # Android browser flow performs at most one same-tab handoff and cannot spawn recursive tabs.
           grep -q "window.addEventListener('appinstalled'" dist/install-gate-v225.js
           grep -q "const INSTALL_CONFIRM_KEY = 'snake2_install_confirmed_v4'" dist/install-gate-v225.js
@@ -124,9 +133,9 @@ jobs:
           # Force installed devices and browsers to receive corrected gameplay logic.
           grep -q "serviceWorker.register('./sw.js?v=2.2.6-install13'" dist/install-gate-v225.js
           grep -q 'install-gate-v225.js?v=2.2.6-install13' dist/index.html
-          grep -q 'game.js?v=2.2.5-missedlife1' dist/index.html
+          grep -q 'game.js?v=2.2.5-visual-size1' dist/index.html
           grep -q 'apple-snake-levels.js?v=2.2.5-missedlife1' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-handoff-loop-fix-20260814-v15' dist/sw.js
+          grep -q 'snake-2.0-v2.2.6-larger-obstacles-portals-20260814-v16' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isInstallGate' dist/sw.js
