@@ -71,7 +71,7 @@ html = index.read_text(encoding='utf-8')
 html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
 html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+|-headsweep\d+)?', 'game.js?v=2.2.5-headsweep2', html)
-html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install12', html)
+html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install13', html)
 scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
@@ -82,7 +82,8 @@ install_text = install_gate.read_text(encoding='utf-8')
 
 persist_boot = """
   const INSTALL_CONFIRM_KEY = 'snake2_install_confirmed_v4';
-  const AUTO_LAUNCH_GUARD_KEY = 'snake2_auto_launch_guard_v1';
+  const AUTO_LAUNCH_GUARD_KEY = 'snake2_auto_launch_guard_v2';
+  const AUTO_LAUNCH_GUARD_MS = 60000;
   let persistedInstallConfirmedAt = 0;
   try {
     const raw = Number(localStorage.getItem(INSTALL_CONFIRM_KEY) || 0);
@@ -138,6 +139,7 @@ new_launch_fn = """  function refreshAndLaunch(event) {
       return;
     }
     state.navigationInProgress = true;
+    setAutoLaunchGuard();
     clearInterval(state.preparationTimer);
     state.preparationTimer = null;
     const link = ensureRefreshButton();
@@ -149,19 +151,21 @@ new_launch_fn = """  function refreshAndLaunch(event) {
 
   function autoLaunchGuardIsActive() {
     try {
-      const attemptedAt = Number(sessionStorage.getItem(AUTO_LAUNCH_GUARD_KEY) || 0);
-      return Number.isFinite(attemptedAt) && Date.now() - attemptedAt < 15000;
+      const attemptedAt = Number(localStorage.getItem(AUTO_LAUNCH_GUARD_KEY) || 0);
+      return Number.isFinite(attemptedAt) && Date.now() - attemptedAt < AUTO_LAUNCH_GUARD_MS;
     } catch (_) {
       return state.autoLaunchAttempted;
     }
   }
 
   function setAutoLaunchGuard() {
-    try { sessionStorage.setItem(AUTO_LAUNCH_GUARD_KEY, String(Date.now())); } catch (_) {}
+    state.autoLaunchAttempted = true;
+    try { localStorage.setItem(AUTO_LAUNCH_GUARD_KEY, String(Date.now())); } catch (_) {}
   }
 
-  async function scheduleAutomaticRefreshAndLaunch(source = 'browser', delayMs = 1200) {
-    if (!isAndroid() || isInstalledLaunch() || !hasInstallConfirmation() || state.autoLaunchAttempted) return;
+  async function scheduleAutomaticRefreshAndLaunch(source = 'browser', delayMs = 0) {
+    if (!isAndroid() || isInstalledLaunch() || !hasInstallConfirmation() ||
+        state.autoLaunchAttempted || autoLaunchGuardIsActive()) return;
     state.autoLaunchAttempted = true;
 
     setTimeout(async () => {
@@ -192,26 +196,9 @@ new_launch_fn = """  function refreshAndLaunch(event) {
       launchUrl.search = '';
       launchUrl.hash = '';
       launchUrl.searchParams.set('source', source === 'install' ? 'installed-auto' : 'browser-auto');
+      launchUrl.searchParams.set('handoff', '1');
       launchUrl.searchParams.set('t', String(Date.now()));
-
-      const launchLink = document.createElement('a');
-      launchLink.href = launchUrl.href;
-      launchLink.target = '_blank';
-      launchLink.rel = 'noopener';
-      launchLink.hidden = true;
-      launchLink.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(launchLink);
-      launchLink.click();
-      launchLink.remove();
-
-      setTimeout(() => {
-        if (document.visibilityState !== 'visible') return;
-        const refreshUrl = new URL(location.href);
-        refreshUrl.search = '';
-        refreshUrl.hash = '';
-        refreshUrl.searchParams.set('refresh', String(Date.now()));
-        location.replace(refreshUrl.href);
-      }, 700);
+      location.replace(launchUrl.href);
     }, delayMs);
   }
 """
@@ -264,9 +251,10 @@ if visibility_old in install_text:
 autostart_marker = "  function autoStartInstalledGame() {\n    const params = new URLSearchParams(location.search);\n"
 autostart_guard = """  function autoStartInstalledGame() {
     const params = new URLSearchParams(location.search);
+    if (params.get('handoff') === '1') state.autoLaunchAttempted = true;
     if (params.get('autostart') === '1' && !isInstalledLaunch()) {
       const clean = new URL(location.href);
-      ['autostart','source','t'].forEach(key => clean.searchParams.delete(key));
+      ['autostart','source','handoff','t'].forEach(key => clean.searchParams.delete(key));
       history.replaceState(null, '', clean.href);
       state.navigationInProgress = false;
       if (hasInstallConfirmation()) showInstalledAction();
@@ -277,13 +265,13 @@ if autostart_marker in install_text:
     install_text = install_text.replace(autostart_marker, autostart_guard, 1)
 
 boot_marker = "    refreshGate();\n    autoStartInstalledGame();"
-boot_replacement = boot_marker + "\n    scheduleAutomaticRefreshAndLaunch('browser', 1200);"
+boot_replacement = boot_marker + "\n    scheduleAutomaticRefreshAndLaunch('browser', 0);"
 if boot_marker not in install_text:
     raise SystemExit('automatic browser launch marker missing')
-if "scheduleAutomaticRefreshAndLaunch('browser', 1200);" not in install_text:
+if "scheduleAutomaticRefreshAndLaunch('browser', 0);" not in install_text:
     install_text = install_text.replace(boot_marker, boot_replacement, 1)
 
-install_text = re.sub(r"serviceWorker\.register\('\./sw\.js\?v=2\.2\.6-install\d+'", "serviceWorker.register('./sw.js?v=2.2.6-install12'", install_text, count=1)
+install_text = re.sub(r"serviceWorker\.register\('\./sw\.js\?v=2\.2\.6-install\d+'", "serviceWorker.register('./sw.js?v=2.2.6-install13'", install_text, count=1)
 install_gate.write_text(install_text, encoding='utf-8')
 
 manifest_path = Path('dist/manifest.webmanifest')

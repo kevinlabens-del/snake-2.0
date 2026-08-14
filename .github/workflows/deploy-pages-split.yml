@@ -58,9 +58,10 @@ jobs:
               raise SystemExit('autoStartInstalledGame block missing')
           replacement = """  function autoStartInstalledGame() {
             const params = new URLSearchParams(location.search);
-            if (!params.has('autostart') && !params.has('source') && !params.has('t')) return;
+            if (!params.has('autostart') && !params.has('source') && !params.has('handoff') && !params.has('t')) return;
+            if (params.get('handoff') === '1') state.autoLaunchAttempted = true;
             const clean = new URL(location.href);
-            ['autostart','source','t'].forEach(key => clean.searchParams.delete(key));
+            ['autostart','source','handoff','t'].forEach(key => clean.searchParams.delete(key));
             history.replaceState(null, '', clean.href);
           }
           """
@@ -94,7 +95,7 @@ jobs:
           grep -q 'Math.ceil(Math.max(1, points.length - 2) / 13)' dist/game.js
           grep -q 'if (points.length <= 48)' dist/game.js
 
-          # Installed Android browser flow attempts one automatic handoff, with a guarded refresh fallback.
+          # Android browser flow performs at most one same-tab handoff and cannot spawn recursive tabs.
           grep -q "window.addEventListener('appinstalled'" dist/install-gate-v225.js
           grep -q "const INSTALL_CONFIRM_KEY = 'snake2_install_confirmed_v4'" dist/install-gate-v225.js
           grep -q 'localStorage.setItem(INSTALL_CONFIRM_KEY' dist/install-gate-v225.js
@@ -102,24 +103,30 @@ jobs:
           grep -q 'Installation terminée' dist/install-gate-v225.js
           grep -q 'Rafraîchir et ouvrir l’application' dist/install-gate-v225.js
           grep -q "button = document.createElement('a')" dist/install-gate-v225.js
-          grep -q "const AUTO_LAUNCH_GUARD_KEY = 'snake2_auto_launch_guard_v1'" dist/install-gate-v225.js
+          grep -q "const AUTO_LAUNCH_GUARD_KEY = 'snake2_auto_launch_guard_v2'" dist/install-gate-v225.js
+          grep -q 'const AUTO_LAUNCH_GUARD_MS = 60000' dist/install-gate-v225.js
           grep -q 'function scheduleAutomaticRefreshAndLaunch' dist/install-gate-v225.js
           grep -q "scheduleAutomaticRefreshAndLaunch('install', 450)" dist/install-gate-v225.js
-          grep -q "scheduleAutomaticRefreshAndLaunch('browser', 1200)" dist/install-gate-v225.js
+          grep -q "scheduleAutomaticRefreshAndLaunch('browser', 0)" dist/install-gate-v225.js
           grep -q 'navigator.getInstalledRelatedApps' dist/install-gate-v225.js
-          grep -q 'launchLink.click()' dist/install-gate-v225.js
-          grep -q 'location.replace(refreshUrl.href)' dist/install-gate-v225.js
+          grep -q 'localStorage.getItem(AUTO_LAUNCH_GUARD_KEY)' dist/install-gate-v225.js
+          grep -q 'localStorage.setItem(AUTO_LAUNCH_GUARD_KEY' dist/install-gate-v225.js
+          grep -q "launchUrl.searchParams.set('handoff', '1')" dist/install-gate-v225.js
+          grep -q 'location.replace(launchUrl.href)' dist/install-gate-v225.js
+          ! grep -q 'sessionStorage.*AUTO_LAUNCH_GUARD_KEY' dist/install-gate-v225.js
+          ! grep -q 'launchLink.click()' dist/install-gate-v225.js
+          ! grep -q 'location.replace(refreshUrl.href)' dist/install-gate-v225.js
           ! grep -q 'window.location.assign(launchUrl.href)' dist/install-gate-v225.js
           ! grep -q "window.open(launchUrl.href, '_blank'" dist/install-gate-v225.js
           ! grep -q "launchUrl.searchParams.set('autostart', '1')" dist/install-gate-v225.js
           ! grep -q 'play.click()' dist/install-gate-v225.js
 
           # Force installed devices and browsers to receive corrected gameplay logic.
-          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install12'" dist/install-gate-v225.js
-          grep -q 'install-gate-v225.js?v=2.2.6-install12' dist/index.html
+          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install13'" dist/install-gate-v225.js
+          grep -q 'install-gate-v225.js?v=2.2.6-install13' dist/index.html
           grep -q 'game.js?v=2.2.5-missedlife1' dist/index.html
           grep -q 'apple-snake-levels.js?v=2.2.5-missedlife1' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-auto-app-launch-20260814-v14' dist/sw.js
+          grep -q 'snake-2.0-v2.2.6-handoff-loop-fix-20260814-v15' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isInstallGate' dist/sw.js
