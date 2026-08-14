@@ -71,7 +71,7 @@ html = index.read_text(encoding='utf-8')
 html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2"(?: defer)?></script>\s*', '', html)
 html = re.sub(r'<script src="\./snake2-stats\.js(?:\?v=[^"]*)?" defer></script>\s*', '', html)
 html = re.sub(r'game\.js\?v=2\.2\.5(?:-stats\d+|-perf\d+|-headsweep\d+)?', 'game.js?v=2.2.5-headsweep2', html)
-html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install11', html)
+html = re.sub(r'install-gate-v225\.js\?v=[^"]+', 'install-gate-v225.js?v=2.2.6-install12', html)
 scripts = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>\n  <script src="./snake2-stats.js?v=20260812h" defer></script>'
 pos = html.lower().rfind('</body>')
 html = html[:pos] + '  ' + scripts + '\n' + html[pos:] if pos >= 0 else html + '\n' + scripts
@@ -82,6 +82,7 @@ install_text = install_gate.read_text(encoding='utf-8')
 
 persist_boot = """
   const INSTALL_CONFIRM_KEY = 'snake2_install_confirmed_v4';
+  const AUTO_LAUNCH_GUARD_KEY = 'snake2_auto_launch_guard_v1';
   let persistedInstallConfirmedAt = 0;
   try {
     const raw = Number(localStorage.getItem(INSTALL_CONFIRM_KEY) || 0);
@@ -101,7 +102,7 @@ state_marker = "    swReady: false,\n    startedAt: performance.now()"
 if 'navigationInProgress: false' not in install_text:
     if state_marker not in install_text:
         raise SystemExit('navigation state marker missing')
-    install_text = install_text.replace(state_marker, "    swReady: false,\n    navigationInProgress: false,\n    startedAt: performance.now()", 1)
+    install_text = install_text.replace(state_marker, "    swReady: false,\n    navigationInProgress: false,\n    autoLaunchAttempted: false,\n    startedAt: performance.now()", 1)
 
 install_text = install_text.replace("    button = document.createElement('button');\n    button.id = 'installRefreshBtn';\n    button.type = 'button';", "    button = document.createElement('a');\n    button.id = 'installRefreshBtn';\n    button.href = './';\n    button.target = '_blank';\n    button.rel = 'noopener';\n    button.setAttribute('role', 'button');", 1)
 
@@ -145,12 +146,96 @@ new_launch_fn = """  function refreshAndLaunch(event) {
       if (label) label.textContent = 'Ouverture de l’application…';
     }
   }
+
+  function autoLaunchGuardIsActive() {
+    try {
+      const attemptedAt = Number(sessionStorage.getItem(AUTO_LAUNCH_GUARD_KEY) || 0);
+      return Number.isFinite(attemptedAt) && Date.now() - attemptedAt < 15000;
+    } catch (_) {
+      return state.autoLaunchAttempted;
+    }
+  }
+
+  function setAutoLaunchGuard() {
+    try { sessionStorage.setItem(AUTO_LAUNCH_GUARD_KEY, String(Date.now())); } catch (_) {}
+  }
+
+  async function scheduleAutomaticRefreshAndLaunch(source = 'browser', delayMs = 1200) {
+    if (!isAndroid() || isInstalledLaunch() || !hasInstallConfirmation() || state.autoLaunchAttempted) return;
+    state.autoLaunchAttempted = true;
+
+    setTimeout(async () => {
+      if (isInstalledLaunch() || !hasInstallConfirmation() || state.deferredPrompt) {
+        state.autoLaunchAttempted = false;
+        return;
+      }
+      if (autoLaunchGuardIsActive()) return;
+
+      if (typeof navigator.getInstalledRelatedApps === 'function') {
+        try {
+          const relatedApps = await navigator.getInstalledRelatedApps();
+          if (Array.isArray(relatedApps) && relatedApps.length > 0 &&
+              !relatedApps.some(app => app?.platform === 'webapp')) {
+            state.autoLaunchAttempted = false;
+            return;
+          }
+        } catch (_) {}
+      }
+
+      setAutoLaunchGuard();
+      state.navigationInProgress = true;
+      clearInterval(state.preparationTimer);
+      state.preparationTimer = null;
+      setStatus('Ouverture de Snake 2.0', 'Passage automatique du navigateur vers l’application…', 'installed');
+
+      const launchUrl = new URL('./', location.href);
+      launchUrl.search = '';
+      launchUrl.hash = '';
+      launchUrl.searchParams.set('source', source === 'install' ? 'installed-auto' : 'browser-auto');
+      launchUrl.searchParams.set('t', String(Date.now()));
+
+      const launchLink = document.createElement('a');
+      launchLink.href = launchUrl.href;
+      launchLink.target = '_blank';
+      launchLink.rel = 'noopener';
+      launchLink.hidden = true;
+      launchLink.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(launchLink);
+      launchLink.click();
+      launchLink.remove();
+
+      setTimeout(() => {
+        if (document.visibilityState !== 'visible') return;
+        const refreshUrl = new URL(location.href);
+        refreshUrl.search = '';
+        refreshUrl.hash = '';
+        refreshUrl.searchParams.set('refresh', String(Date.now()));
+        location.replace(refreshUrl.href);
+      }, 700);
+    }, delayMs);
+  }
 """
 install_text = install_text[:start] + new_launch_fn + install_text[end:]
 
 appinstalled_line = "    state.installConfirmedAt = Date.now();"
 if appinstalled_line in install_text and 'localStorage.setItem(INSTALL_CONFIRM_KEY' not in install_text:
     install_text = install_text.replace(appinstalled_line, appinstalled_line + "\n    try { localStorage.setItem(INSTALL_CONFIRM_KEY, String(state.installConfirmedAt)); } catch (_) {}", 1)
+
+appinstalled_start = install_text.find("  window.addEventListener('appinstalled'")
+appinstalled_end = install_text.find("\n  window.addEventListener('DOMContentLoaded'", appinstalled_start)
+if appinstalled_start < 0 or appinstalled_end < 0:
+    raise SystemExit('appinstalled block missing')
+appinstalled_block = install_text[appinstalled_start:appinstalled_end]
+if "scheduleAutomaticRefreshAndLaunch('install', 450);" not in appinstalled_block:
+    marker = "    showInstalledAction();"
+    if marker not in appinstalled_block:
+        raise SystemExit('appinstalled launch marker missing')
+    appinstalled_block = appinstalled_block.replace(
+        marker,
+        marker + "\n    scheduleAutomaticRefreshAndLaunch('install', 450);",
+        1,
+    )
+    install_text = install_text[:appinstalled_start] + appinstalled_block + install_text[appinstalled_end:]
 
 before_marker = "  window.addEventListener('beforeinstallprompt', event => {\n    event.preventDefault();"
 if before_marker in install_text and 'localStorage.removeItem(INSTALL_CONFIRM_KEY)' not in install_text.split("window.addEventListener('beforeinstallprompt'",1)[1].split("window.addEventListener('appinstalled'",1)[0]:
@@ -191,12 +276,31 @@ autostart_guard = """  function autoStartInstalledGame() {
 if autostart_marker in install_text:
     install_text = install_text.replace(autostart_marker, autostart_guard, 1)
 
-install_text = re.sub(r"serviceWorker\.register\('\./sw\.js\?v=2\.2\.6-install\d+'", "serviceWorker.register('./sw.js?v=2.2.6-install11'", install_text, count=1)
+boot_marker = "    refreshGate();\n    autoStartInstalledGame();"
+boot_replacement = boot_marker + "\n    scheduleAutomaticRefreshAndLaunch('browser', 1200);"
+if boot_marker not in install_text:
+    raise SystemExit('automatic browser launch marker missing')
+if "scheduleAutomaticRefreshAndLaunch('browser', 1200);" not in install_text:
+    install_text = install_text.replace(boot_marker, boot_replacement, 1)
+
+install_text = re.sub(r"serviceWorker\.register\('\./sw\.js\?v=2\.2\.6-install\d+'", "serviceWorker.register('./sw.js?v=2.2.6-install12'", install_text, count=1)
 install_gate.write_text(install_text, encoding='utf-8')
 
 manifest_path = Path('dist/manifest.webmanifest')
 manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
 manifest['launch_handler'] = {'client_mode': ['navigate-existing', 'auto']}
+self_related_app = {
+    'platform': 'webapp',
+    'url': './manifest.webmanifest',
+}
+if manifest.get('id'):
+    self_related_app['id'] = manifest['id']
+related_apps = [
+    app for app in manifest.get('related_applications', [])
+    if not (app.get('platform') == 'webapp' and app.get('url') in ('./manifest.webmanifest', 'manifest.webmanifest'))
+]
+manifest['related_applications'] = [self_related_app, *related_apps]
+manifest['prefer_related_applications'] = False
 manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
 sw = Path('dist/sw.js')

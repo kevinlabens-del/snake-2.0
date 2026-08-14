@@ -94,7 +94,7 @@ jobs:
           grep -q 'Math.ceil(Math.max(1, points.length - 2) / 13)' dist/game.js
           grep -q 'if (points.length <= 48)' dist/game.js
 
-          # Installation flow remains unchanged.
+          # Installed Android browser flow attempts one automatic handoff, with a guarded refresh fallback.
           grep -q "window.addEventListener('appinstalled'" dist/install-gate-v225.js
           grep -q "const INSTALL_CONFIRM_KEY = 'snake2_install_confirmed_v4'" dist/install-gate-v225.js
           grep -q 'localStorage.setItem(INSTALL_CONFIRM_KEY' dist/install-gate-v225.js
@@ -102,17 +102,24 @@ jobs:
           grep -q 'Installation terminée' dist/install-gate-v225.js
           grep -q 'Rafraîchir et ouvrir l’application' dist/install-gate-v225.js
           grep -q "button = document.createElement('a')" dist/install-gate-v225.js
+          grep -q "const AUTO_LAUNCH_GUARD_KEY = 'snake2_auto_launch_guard_v1'" dist/install-gate-v225.js
+          grep -q 'function scheduleAutomaticRefreshAndLaunch' dist/install-gate-v225.js
+          grep -q "scheduleAutomaticRefreshAndLaunch('install', 450)" dist/install-gate-v225.js
+          grep -q "scheduleAutomaticRefreshAndLaunch('browser', 1200)" dist/install-gate-v225.js
+          grep -q 'navigator.getInstalledRelatedApps' dist/install-gate-v225.js
+          grep -q 'launchLink.click()' dist/install-gate-v225.js
+          grep -q 'location.replace(refreshUrl.href)' dist/install-gate-v225.js
           ! grep -q 'window.location.assign(launchUrl.href)' dist/install-gate-v225.js
           ! grep -q "window.open(launchUrl.href, '_blank'" dist/install-gate-v225.js
           ! grep -q "launchUrl.searchParams.set('autostart', '1')" dist/install-gate-v225.js
           ! grep -q 'play.click()' dist/install-gate-v225.js
 
           # Force installed devices and browsers to receive corrected gameplay logic.
-          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install11'" dist/install-gate-v225.js
-          grep -q 'install-gate-v225.js?v=2.2.6-install11' dist/index.html
+          grep -q "serviceWorker.register('./sw.js?v=2.2.6-install12'" dist/install-gate-v225.js
+          grep -q 'install-gate-v225.js?v=2.2.6-install12' dist/index.html
           grep -q 'game.js?v=2.2.5-missedlife1' dist/index.html
           grep -q 'apple-snake-levels.js?v=2.2.5-missedlife1' dist/index.html
-          grep -q 'snake-2.0-v2.2.6-missed-life-20260813-v13' dist/sw.js
+          grep -q 'snake-2.0-v2.2.6-auto-app-launch-20260814-v14' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isInstallGate' dist/sw.js
@@ -122,6 +129,17 @@ jobs:
           node --check dist/sw.js
           node --check dist/game.js
           node --check dist/apple-snake-levels.js
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const manifest = JSON.parse(fs.readFileSync('./dist/manifest.webmanifest', 'utf8'));
+          const selfApp = manifest.related_applications?.find(app => app.platform === 'webapp');
+          if (!selfApp || selfApp.url !== './manifest.webmanifest') {
+            throw new Error('The installed PWA cannot be detected from the browser');
+          }
+          if (manifest.prefer_related_applications !== false) {
+            throw new Error('The web app must remain the preferred installation target');
+          }
+          NODE
           node - <<'NODE'
           const Levels = require('./dist/apple-snake-levels.js');
           const mission = Levels.getMission(15, {}, { adaptive: true });

@@ -97,7 +97,7 @@ sw_path = Path('dist/sw.js')
 sw = sw_path.read_text(encoding='utf-8')
 sw = re.sub(
     r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';",
-    "const CACHE = 'snake-2.0-v2.2.6-missed-life-20260813-v13';",
+    "const CACHE = 'snake-2.0-v2.2.6-auto-app-launch-20260814-v14';",
     sw,
     count=1,
 )
