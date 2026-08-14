@@ -50,25 +50,25 @@ elif 'Commandes tactiles et clavier' not in index:
 
 index = re.sub(
     r'href="manifest\.webmanifest(?:\?v=[^"]*)?"',
-    'href="manifest.webmanifest?v=2.2.8-responsive1"',
+    'href="manifest.webmanifest?v=2.2.8-responsive2"',
     index,
     count=1,
 )
 index = re.sub(
     r'styles-v225\.css\?v=[^"\']+',
-    'styles-v225.css?v=2.2.8-responsive1',
+    'styles-v225.css?v=2.2.8-responsive2',
     index,
     count=1,
 )
 index = re.sub(
     r'install-gate-v225\.js\?v=[^"\']+',
-    'install-gate-v225.js?v=2.2.8-responsive1',
+    'install-gate-v225.js?v=2.2.8-responsive2',
     index,
     count=1,
 )
 index = re.sub(
     r'game\.js\?v=[^"\']+',
-    'game.js?v=2.2.8-responsive1',
+    'game.js?v=2.2.8-responsive2',
     index,
     count=1,
 )
@@ -100,6 +100,11 @@ responsive_styles = r'''
 
 /* Snake 2.0 v2.2.8 — portrait + paysage réellement jouables */
 .portrait-guard{display:none!important}
+body.game-active .app{display:flex;flex-direction:column}
+body.game-active .topbar,
+body.game-active #snake2-live-stats,
+body.game-active .quick-volume{flex:0 0 auto}
+body.game-active main{flex:1 1 0;height:auto;min-height:0}
 
 @media (orientation:landscape) and (min-width:520px){
   body.game-active .app{
@@ -127,7 +132,7 @@ responsive_styles = r'''
   body.game-active .quick-volume{width:min(280px,34vw);margin:-3px auto 3px;padding:1px 7px}
   body.game-active main{
     width:100%;
-    height:calc(100dvh - 76px - max(6px,env(safe-area-inset-top)) - max(8px,env(safe-area-inset-bottom)));
+    height:auto;
     min-height:0;
   }
   body.game-active #gameScreen.active{
@@ -179,7 +184,8 @@ responsive_styles = r'''
     grid-area:board;
     align-self:center;
     justify-self:center;
-    width:min(100%,calc(100dvh - 88px),860px);
+    width:auto;
+    height:min(100%,860px);
     max-width:100%;
     max-height:100%;
     margin:0;
@@ -206,9 +212,6 @@ responsive_styles = r'''
   body.game-active .brand strong{font-size:20px}
   body.game-active .brand span{display:none}
   body.game-active .quick-volume{display:none}
-  body.game-active main{
-    height:calc(100dvh - 43px - max(6px,env(safe-area-inset-top)) - max(8px,env(safe-area-inset-bottom)));
-  }
   body.game-active #gameScreen.active{
     grid-template-columns:clamp(170px,29vw,270px) minmax(0,1fr);
     column-gap:8px;
@@ -221,7 +224,7 @@ responsive_styles = r'''
   body.game-active .mission-strip{padding:6px 8px;border-radius:11px}
   body.game-active .mission-strip strong{font-size:10px;line-height:1.15}
   body.game-active .mission-strip span{font-size:8px;line-height:1.2}
-  body.game-active .game-shell{width:min(100%,calc(100dvh - 51px),560px)}
+  body.game-active .game-shell{width:auto;height:min(100%,560px)}
   body.game-active .game-tools{gap:4px}
   body.game-active .game-tools .secondary{padding:6px 5px;font-size:9px;border-radius:10px}
   body.game-active .game-tools .tutorial-tool{flex-basis:32px;min-width:32px;border-radius:10px;font-size:14px}
@@ -243,13 +246,13 @@ MANIFEST_PATH.write_text(
 install_gate = INSTALL_GATE_PATH.read_text(encoding='utf-8')
 install_gate = re.sub(
     r"const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_[^']+';",
-    "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_responsive_v20';",
+    "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_responsive_v21';",
     install_gate,
     count=1,
 )
 install_gate = re.sub(
     r"serviceWorker\.register\('\./sw\.js\?v=[^']+'",
-    "serviceWorker.register('./sw.js?v=2.2.8-responsive1'",
+    "serviceWorker.register('./sw.js?v=2.2.8-responsive2'",
     install_gate,
     count=1,
 )
@@ -259,7 +262,7 @@ INSTALL_GATE_PATH.write_text(install_gate, encoding='utf-8')
 sw = SW_PATH.read_text(encoding='utf-8')
 sw = re.sub(
     r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';",
-    "const CACHE = 'snake-2.0-v2.2.8-responsive-landscape-20260814-v20';",
+    "const CACHE = 'snake-2.0-v2.2.8-responsive-landscape-20260814-v21';",
     sw,
     count=1,
 )

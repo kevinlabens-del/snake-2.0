@@ -122,6 +122,8 @@ jobs:
           grep -q 'Snake 2.0 v2.2.8 — portrait + paysage réellement jouables' dist/styles-v225.css
           grep -q 'grid-template-areas:' dist/styles-v225.css
           grep -q '"hud board"' dist/styles-v225.css
+          grep -q 'body.game-active .app{display:flex;flex-direction:column}' dist/styles-v225.css
+          grep -q 'height:min(100%,860px)' dist/styles-v225.css
           grep -q '.portrait-guard{display:none!important}' dist/styles-v225.css
           grep -q 'Commandes tactiles et clavier' dist/index.html
           grep -q 'screen.orientation?.unlock' dist/game.js
@@ -144,7 +146,7 @@ jobs:
           grep -q 'navigator.getInstalledRelatedApps' dist/install-gate-v225.js
           grep -q 'localStorage.getItem(AUTO_LAUNCH_GUARD_KEY)' dist/install-gate-v225.js
           grep -q 'localStorage.setItem(AUTO_LAUNCH_GUARD_KEY' dist/install-gate-v225.js
-          grep -q "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_responsive_v20'" dist/install-gate-v225.js
+          grep -q "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_responsive_v21'" dist/install-gate-v225.js
           grep -q 'const HAD_SW_CONTROLLER_AT_BOOT = Boolean(navigator.serviceWorker?.controller)' dist/install-gate-v225.js
           grep -q "navigator.serviceWorker.addEventListener('controllerchange'" dist/install-gate-v225.js
           grep -q 'sessionStorage.setItem(SW_UPDATE_RELOAD_KEY' dist/install-gate-v225.js
@@ -159,13 +161,13 @@ jobs:
           ! grep -q 'play.click()' dist/install-gate-v225.js
 
           # Force installed devices and browsers to receive corrected gameplay logic.
-          grep -q "serviceWorker.register('./sw.js?v=2.2.8-responsive1'" dist/install-gate-v225.js
-          grep -q 'manifest.webmanifest?v=2.2.8-responsive1' dist/index.html
-          grep -q 'styles-v225.css?v=2.2.8-responsive1' dist/index.html
-          grep -q 'install-gate-v225.js?v=2.2.8-responsive1' dist/index.html
-          grep -q 'game.js?v=2.2.8-responsive1' dist/index.html
+          grep -q "serviceWorker.register('./sw.js?v=2.2.8-responsive2'" dist/install-gate-v225.js
+          grep -q 'manifest.webmanifest?v=2.2.8-responsive2' dist/index.html
+          grep -q 'styles-v225.css?v=2.2.8-responsive2' dist/index.html
+          grep -q 'install-gate-v225.js?v=2.2.8-responsive2' dist/index.html
+          grep -q 'game.js?v=2.2.8-responsive2' dist/index.html
           grep -q 'apple-snake-levels.js?v=2.2.5-missedlife1' dist/index.html
-          grep -q 'snake-2.0-v2.2.8-responsive-landscape-20260814-v20' dist/sw.js
+          grep -q 'snake-2.0-v2.2.8-responsive-landscape-20260814-v21' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isCriticalRuntime' dist/sw.js
