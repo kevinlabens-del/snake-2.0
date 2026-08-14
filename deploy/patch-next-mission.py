@@ -92,13 +92,13 @@ install_gate_path = Path('dist/install-gate-v225.js')
 install_gate = install_gate_path.read_text(encoding='utf-8')
 install_gate = re.sub(
     r"const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_[^']+';",
-    "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_next_mission_v18';",
+    "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_stats_secure_v19';",
     install_gate,
     count=1,
 )
 install_gate = re.sub(
     r"serviceWorker\.register\('\./sw\.js\?v=[^']+'",
-    "serviceWorker.register('./sw.js?v=2.2.7-nextmission1'",
+    "serviceWorker.register('./sw.js?v=2.2.7-stats-secure1'",
     install_gate,
     count=1,
 )
@@ -108,7 +108,7 @@ sw_path = Path('dist/sw.js')
 sw = sw_path.read_text(encoding='utf-8')
 sw = re.sub(
     r"const CACHE = 'snake-2\.0-v2\.2\.[^']*';",
-    "const CACHE = 'snake-2.0-v2.2.7-next-mission-preview-20260814-v18';",
+    "const CACHE = 'snake-2.0-v2.2.7-secure-statistics-20260814-v19';",
     sw,
     count=1,
 )
