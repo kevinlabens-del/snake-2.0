@@ -49,6 +49,7 @@ jobs:
           python3 deploy/patch-next-mission.py
           python3 deploy/patch-responsive-layout.py
           python3 deploy/patch-input-background.py
+          python3 deploy/patch-haptics.py
 
           python3 - <<'PY'
           from pathlib import Path
@@ -132,7 +133,7 @@ jobs:
           ! grep -q 'id="portraitGuard"' dist/index.html
 
           # Desktop and mobile share a reliable, low-latency input/background runtime.
-          grep -q "const VERSION = '2.2.9'" dist/game.js
+          grep -q "const VERSION = '2.2.10'" dist/game.js
           grep -q 'const gameplayBackgroundLoads = new Map()' dist/game.js
           grep -q "filter((\[key\]) => !key.startsWith('background'))" dist/game.js
           grep -q 'await selectRandomGameplayBackground()' dist/game.js
@@ -144,10 +145,23 @@ jobs:
           grep -q "gameShell.addEventListener('pointermove'" dist/game.js
           grep -q 'gameShell.setPointerCapture' dist/game.js
           grep -q 'const baseHeadAngle = lerpAngle' dist/game.js
-          grep -q "serviceWorker.register('./sw.js?v=2.2.9-input-background1'" dist/game.js
-          grep -q "serviceWorker.register('./sw.js?v=2.2.9-input-background1'" dist/install-gate-v225.js
-          grep -q "const CACHE = 'snake-2.0-v2.2.9-input-background-20260814-v1'" dist/sw.js
+          grep -q "serviceWorker.register('./sw.js?v=2.2.10-haptics1'" dist/game.js
+          grep -q "serviceWorker.register('./sw.js?v=2.2.10-haptics1'" dist/install-gate-v225.js
+          grep -q "const CACHE = 'snake-2.0-v2.2.10-haptics-20260816-v1'" dist/sw.js
           ! grep -q "'./assets/backgrounds/" dist/sw.js
+
+          # Haptic feedback must be enabled, diagnosable and perceptible on Android.
+          grep -q 'hapticsRuntimeVersion: 0' dist/game.js
+          grep -q 'save.hapticsRuntimeVersion = 1' dist/game.js
+          grep -q "typeof navigator.vibrate !== 'function'" dist/game.js
+          grep -q 'navigator.userActivation.hasBeenActive' dist/game.js
+          grep -q 'return navigator.vibrate(pattern) === true' dist/game.js
+          grep -q 'vibrate(35);' dist/game.js
+          grep -q "vibrate(kind === 'gold' ? \[45, 30, 70\] : 35)" dist/game.js
+          grep -q 'vibrate(\[70, 35, 110\])' dist/game.js
+          grep -q "toast(hapticOk ? 'Vibrations activées'" dist/game.js
+          ! grep -q 'function vibrate(ms = 25)' dist/game.js
+          ! grep -q 'vibrate(18);' dist/game.js
 
           # Android browser flow performs at most one same-tab handoff and cannot spawn recursive tabs.
           grep -q "window.addEventListener('appinstalled'" dist/install-gate-v225.js
@@ -165,7 +179,7 @@ jobs:
           grep -q 'navigator.getInstalledRelatedApps' dist/install-gate-v225.js
           grep -q 'localStorage.getItem(AUTO_LAUNCH_GUARD_KEY)' dist/install-gate-v225.js
           grep -q 'localStorage.setItem(AUTO_LAUNCH_GUARD_KEY' dist/install-gate-v225.js
-          grep -q "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_input_background_v1'" dist/install-gate-v225.js
+          grep -q "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_haptics_v1'" dist/install-gate-v225.js
           grep -q 'const HAD_SW_CONTROLLER_AT_BOOT = Boolean(navigator.serviceWorker?.controller)' dist/install-gate-v225.js
           grep -q "navigator.serviceWorker.addEventListener('controllerchange'" dist/install-gate-v225.js
           grep -q 'sessionStorage.setItem(SW_UPDATE_RELOAD_KEY' dist/install-gate-v225.js
@@ -180,13 +194,13 @@ jobs:
           ! grep -q 'play.click()' dist/install-gate-v225.js
 
           # Force installed devices and browsers to receive corrected gameplay logic.
-          grep -q "serviceWorker.register('./sw.js?v=2.2.9-input-background1'" dist/install-gate-v225.js
-          grep -q 'manifest.webmanifest?v=2.2.9-input-background1' dist/index.html
-          grep -q 'styles-v225.css?v=2.2.9-input-background1' dist/index.html
-          grep -q 'install-gate-v225.js?v=2.2.9-input-background1' dist/index.html
-          grep -q 'game.js?v=2.2.9-input-background1' dist/index.html
+          grep -q "serviceWorker.register('./sw.js?v=2.2.10-haptics1'" dist/install-gate-v225.js
+          grep -q 'manifest.webmanifest?v=2.2.10-haptics1' dist/index.html
+          grep -q 'styles-v225.css?v=2.2.10-haptics1' dist/index.html
+          grep -q 'install-gate-v225.js?v=2.2.10-haptics1' dist/index.html
+          grep -q 'game.js?v=2.2.10-haptics1' dist/index.html
           grep -q 'apple-snake-levels.js?v=2.2.5-missedlife1' dist/index.html
-          grep -q 'snake-2.0-v2.2.9-input-background-20260814-v1' dist/sw.js
+          grep -q 'snake-2.0-v2.2.10-haptics-20260816-v1' dist/sw.js
 
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isCriticalRuntime' dist/sw.js
@@ -199,6 +213,7 @@ jobs:
           node --check dist/snake2-stats.js
           node deploy/test-snake2-stats.mjs
           node deploy/test-input-background.mjs
+          node deploy/test-haptics.mjs
           node - <<'NODE'
           const fs = require('node:fs');
           const manifest = JSON.parse(fs.readFileSync('./dist/manifest.webmanifest', 'utf8'));
