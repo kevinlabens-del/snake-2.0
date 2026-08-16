@@ -114,11 +114,12 @@ const backgroundCatalog = sliceBetween(
   'terrain catalog',
 );
 const backgroundEntries = [...backgroundCatalog.matchAll(/file:\s*'([^']+)'/g)];
-assert.equal(backgroundEntries.length, 9, 'all nine gameplay terrains must remain selectable');
+assert.equal(backgroundEntries.length, 150, 'all 150 gameplay terrains must be selectable');
 for (const [, filename] of backgroundEntries) {
   const relativePath = path.join('assets', 'backgrounds', filename);
   assert.ok(fs.existsSync(path.resolve('dist', relativePath)), `missing terrain file: ${relativePath}`);
 }
+assert.match(game, /background\.src \|\| assetManifest\[background\.key\]/, 'bank backgrounds must use their lazy source URL');
 assert.doesNotMatch(sw, /'\.\/assets\/backgrounds\//, 'terrain images must be cached lazily');
 assert.match(game, /await selectRandomGameplayBackground\(\);/);
 assert.match(game, /scheduleGameplayBackgroundRetry/);
