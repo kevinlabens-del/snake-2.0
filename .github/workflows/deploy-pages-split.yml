@@ -40,8 +40,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m pip install --quiet pillow
           cp deploy/snake2-stats.js dist/snake2-stats.js
           cp deploy/install-gate-fixed.js dist/install-gate-v225.js
+          python3 deploy/prepare-background-bank.py
           python3 deploy/patch-game.py
           python3 deploy/patch-head-sway.py
           python3 deploy/patch-missed-apples.py
@@ -49,6 +51,7 @@ jobs:
           python3 deploy/patch-next-mission.py
           python3 deploy/patch-responsive-layout.py
           python3 deploy/patch-input-background.py
+          python3 deploy/patch-background-bank.py
 
           python3 - <<'PY'
           from pathlib import Path
@@ -137,6 +140,9 @@ jobs:
           grep -q "filter((\[key\]) => !key.startsWith('background'))" dist/game.js
           grep -q 'await selectRandomGameplayBackground()' dist/game.js
           grep -q 'scheduleGameplayBackgroundRetry' dist/game.js
+          grep -q "id: 'bank-150'" dist/game.js
+          grep -q 'background.src || assetManifest\[background.key\]' dist/game.js
+          test "$(find dist/assets/backgrounds -maxdepth 1 -name 'bank-*.webp' | wc -l)" -eq 150
           grep -q 'const MAX_DIRECTION_QUEUE = 2' dist/game.js
           grep -q 'state.inputQueue.push' dist/game.js
           grep -q 'const queuedDirection = state.inputQueue.shift()' dist/game.js
