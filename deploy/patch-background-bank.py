@@ -1,6 +1,8 @@
 from pathlib import Path
+import re
 
 GAME_PATH = Path('dist/game.js')
+INDEX_PATH = Path('dist/index.html')
 COUNT = 150
 THEMES = [
     'desert-dunes', 'volcanic-lava', 'snowfield', 'ice-cave', 'tropical-beach',
@@ -43,5 +45,30 @@ if old_overlay not in text:
     raise SystemExit('Background overlay render anchor missing')
 text = text.replace(old_overlay, new_overlay, 1)
 
+# Grid removal is permanent. Do not merely switch the saved preference off:
+# delete the renderer so old localStorage values cannot bring the lines back.
+text = re.sub(r"(\n\s*grid:\s*)true,", r"\1false,", text, count=1)
+grid_block = re.compile(
+    r"\n\s*if \(save\.grid\) \{\s*\n"
+    r"\s*ctx\.strokeStyle = 'rgba\(225,240,225,\.08\)';\s*\n"
+    r"\s*ctx\.lineWidth = 1;[\s\S]*?\n\s*\}\s*(?=\n)",
+    re.MULTILINE,
+)
+text, removed = grid_block.subn('\n', text, count=1)
+if removed != 1:
+    raise SystemExit('Gameplay grid renderer anchor missing')
+text = text.replace("\n  bindToggle('#toggleGrid', 'grid');", '', 1)
+
+index = INDEX_PATH.read_text(encoding='utf-8')
+index, removed_row = re.subn(
+    r"\s*<div class=\"settings-row\"><div><b>Grille du plateau</b><p>Repères visuels pendant la partie</p></div><button class=\"toggle\" id=\"toggleGrid\"><i></i></button></div>\s*",
+    '\n',
+    index,
+    count=1,
+)
+if removed_row != 1:
+    raise SystemExit('Grid settings row missing')
+
 GAME_PATH.write_text(text, encoding='utf-8')
-print(f'Patched Snake 2.0 gameplay catalog with {COUNT} visible backgrounds across {len(THEMES)} themes.')
+INDEX_PATH.write_text(index, encoding='utf-8')
+print(f'Patched Snake 2.0 with {COUNT} visible natural-look backgrounds and no gameplay grid.')
