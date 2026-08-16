@@ -1,10 +1,6 @@
 from pathlib import Path
-import re
 
 GAME_PATH = Path('dist/game.js')
-INDEX_PATH = Path('dist/index.html')
-INSTALL_GATE_PATH = Path('dist/install-gate-v225.js')
-SW_PATH = Path('dist/sw.js')
 
 
 def replace_once(text, old, new, label):
@@ -14,10 +10,6 @@ def replace_once(text, old, new, label):
 
 
 game = GAME_PATH.read_text(encoding='utf-8')
-
-# Volume calibration release. The previous 6% user setting is deliberately
-# mapped to the new 75% position: 75 * 0.0008 == 0.06 effective user volume.
-game = re.sub(r"const VERSION = '[^']+';", "const VERSION = '2.2.11';", game, count=1)
 
 # Persist a one-time migration marker. Existing low-volume users keep the same
 # audible level while their slider moves to the newly useful range (6% -> 75%).
@@ -65,51 +57,9 @@ game = replace_once(
     'live volume slider curve',
 )
 
-# Force browsers and installed devices onto the recalibrated audio runtime.
-game = re.sub(
-    r"serviceWorker\.register\('\./sw\.js\?v=[^']+'",
-    "serviceWorker.register('./sw.js?v=2.2.11-volume1'",
-    game,
-    count=1,
-)
 GAME_PATH.write_text(game, encoding='utf-8')
 
-index = INDEX_PATH.read_text(encoding='utf-8')
-for filename in ('manifest.webmanifest', 'styles-v225.css', 'install-gate-v225.js', 'game.js'):
-    index = re.sub(
-        rf'{re.escape(filename)}\?v=[^"\']+',
-        f'{filename}?v=2.2.11-volume1',
-        index,
-        count=1,
-    )
-INDEX_PATH.write_text(index, encoding='utf-8')
-
-install_gate = INSTALL_GATE_PATH.read_text(encoding='utf-8')
-install_gate = re.sub(
-    r"const SW_UPDATE_RELOAD_KEY = '[^']+';",
-    "const SW_UPDATE_RELOAD_KEY = 'snake2_sw_update_volume_v1';",
-    install_gate,
-    count=1,
-)
-install_gate = re.sub(
-    r"serviceWorker\.register\('\./sw\.js\?v=[^']+'",
-    "serviceWorker.register('./sw.js?v=2.2.11-volume1'",
-    install_gate,
-    count=1,
-)
-INSTALL_GATE_PATH.write_text(install_gate, encoding='utf-8')
-
-sw = SW_PATH.read_text(encoding='utf-8')
-sw = re.sub(
-    r"const CACHE = '[^']+';",
-    "const CACHE = 'snake-2.0-v2.2.11-volume-20260817-v1';",
-    sw,
-    count=1,
-)
-SW_PATH.write_text(sw, encoding='utf-8')
-
 checks = {
-    "const VERSION = '2.2.11'": game,
     'audioVolumeRuntimeVersion: 0': game,
     'legacyMusicVolume * 12.5': game,
     'function effectiveMusicVolume(percent)': game,
@@ -117,9 +67,6 @@ checks = {
     'Math.min(0.08': game,
     'music?.setVolume(effectiveMusicVolume(musicVolume))': game,
     'music?.setVolume(effectiveMusicVolume(save.musicVolume))': game,
-    'game.js?v=2.2.11-volume1': index,
-    "serviceWorker.register('./sw.js?v=2.2.11-volume1'": install_gate,
-    "const CACHE = 'snake-2.0-v2.2.11-volume-20260817-v1'": sw,
 }
 for needle, haystack in checks.items():
     if needle not in haystack:
