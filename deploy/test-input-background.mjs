@@ -115,11 +115,15 @@ const backgroundCatalog = sliceBetween(
 );
 const backgroundEntries = [...backgroundCatalog.matchAll(/file:\s*'([^']+)'/g)];
 assert.equal(backgroundEntries.length, 150, 'all 150 gameplay terrains must be selectable');
+assert.equal((backgroundCatalog.match(/overlay:\s*'rgba\(0,0,0,0\)'/g) || []).length, 150,
+  'every terrain must explicitly use a transparent overlay');
 for (const [, filename] of backgroundEntries) {
   const relativePath = path.join('assets', 'backgrounds', filename);
   assert.ok(fs.existsSync(path.resolve('dist', relativePath)), `missing terrain file: ${relativePath}`);
 }
 assert.match(game, /background\.src \|\| assetManifest\[background\.key\]/, 'bank backgrounds must use their lazy source URL');
+assert.match(game, /frameCtx\.fillStyle = background\.overlay \|\| 'rgba\(0,0,0,0\)'/,
+  'background renderer must never reuse an opaque fillStyle when overlay is absent');
 assert.doesNotMatch(sw, /'\.\/assets\/backgrounds\//, 'terrain images must be cached lazily');
 assert.match(game, /await selectRandomGameplayBackground\(\);/);
 assert.match(game, /scheduleGameplayBackgroundRetry/);
@@ -134,5 +138,6 @@ console.log(JSON.stringify({
   rapidTurns: 2,
   criticalAssetsLoaded: loadedKeys.length,
   terrainFiles: backgroundEntries.length,
+  terrainTransparentOverlays: 150,
   terrainPrecacheEntries: 0,
 }));
