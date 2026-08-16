@@ -125,7 +125,7 @@ assert.match(game, /scheduleGameplayBackgroundRetry/);
 assert.match(game, /assetErrors\.delete\(background\.key\)/);
 
 for (const filename of ['manifest.webmanifest', 'styles-v225.css', 'install-gate-v225.js', 'game.js']) {
-  assert.ok(index.includes(`${filename}?v=2.2.9-input-background1`), `${filename} release id is stale`);
+  assert.ok(index.includes(`${filename}?v=2.2.10-haptics1`), `${filename} release id is stale`);
 }
 
 console.log(JSON.stringify({
