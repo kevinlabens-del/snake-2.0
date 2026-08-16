@@ -23,7 +23,7 @@ for index in range(COUNT):
     theme = THEMES[index // 10]
     entries.append(
         "    { id: 'bank-%03d', key: 'backgroundBank%03d', file: 'bank-%03d.webp', "
-        "src: './assets/backgrounds/bank-%03d.webp', theme: '%s', fallback: '#101827' },"
+        "src: './assets/backgrounds/bank-%03d.webp', theme: '%s', fallback: '#101827', overlay: 'rgba(0,0,0,0)' },"
         % (number, number, number, number, theme)
     )
 
@@ -36,5 +36,12 @@ if old_loader not in text:
     raise SystemExit('Lazy background loader anchor missing')
 text = text.replace(old_loader, new_loader, 1)
 
+# Never let an undefined overlay reuse a previous opaque Canvas fillStyle.
+old_overlay = '    frameCtx.fillStyle = background.overlay;'
+new_overlay = "    frameCtx.fillStyle = background.overlay || 'rgba(0,0,0,0)';"
+if old_overlay not in text:
+    raise SystemExit('Background overlay render anchor missing')
+text = text.replace(old_overlay, new_overlay, 1)
+
 GAME_PATH.write_text(text, encoding='utf-8')
-print(f'Patched Snake 2.0 gameplay catalog with {COUNT} backgrounds across {len(THEMES)} themes.')
+print(f'Patched Snake 2.0 gameplay catalog with {COUNT} visible backgrounds across {len(THEMES)} themes.')
