@@ -59,11 +59,22 @@ new_vibrate = """  function vibrate(pattern = 25) {
 game = replace_once(game, old_vibrate, new_vibrate, 'vibration runtime')
 
 # A normal apple used only 18 ms, which can be imperceptible on many phones.
-game = replace_once(game, '    vibrate(18);', '    vibrate(35);', 'green apple haptic')
+# Keep the first 35 ms pulse for compatibility, then add a short second pulse so
+# every ordinary food pickup is unmistakable without feeling like a collision.
+game = replace_once(
+    game,
+    "    vibrate(18);",
+    "    vibrate(35);\n    window.setTimeout(() => vibrate(45), 55);",
+    'green apple haptic',
+)
+
+# Every positive special food also gets a clear two-pulse eating signature.
+# Gold keeps its stronger unique pattern; poison/scorpion retain their damage
+# pattern in the negative-life branch below.
 game = replace_once(
     game,
     "vibrate(kind === 'gold' ? [20, 20, 30] : 16);",
-    "vibrate(kind === 'gold' ? [45, 30, 70] : 35);",
+    "vibrate(kind === 'gold' ? [45, 30, 70] : 35);\n      if (kind !== 'gold') window.setTimeout(() => vibrate(45), 55);",
     'bonus apple haptic',
 )
 
@@ -143,6 +154,7 @@ checks = {
     'navigator.userActivation.hasBeenActive': game,
     'return navigator.vibrate(pattern) === true': game,
     'vibrate(35);': game,
+    "window.setTimeout(() => vibrate(45), 55);": game,
     "vibrate(kind === 'gold' ? [45, 30, 70] : 35)": game,
     "vibrate([70, 35, 110])": game,
     "toast(hapticOk ? 'Vibrations activées'": game,
