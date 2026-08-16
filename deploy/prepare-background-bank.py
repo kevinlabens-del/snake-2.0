@@ -26,7 +26,6 @@ ATLAS_PATH.write_bytes(atlas_bytes)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # The 150-bank catalog replaces the nine legacy photograph backgrounds entirely.
-# Keeping them in Pages only wastes several megabytes and can confuse audits.
 for old in list(OUTPUT_DIR.glob('*.jpg')) + list(OUTPUT_DIR.glob('*.jpeg')):
     old.unlink(missing_ok=True)
 for old in OUTPUT_DIR.glob('bank-*.webp'):
@@ -50,11 +49,18 @@ with Image.open(ATLAS_PATH) as atlas:
             (row + 1) * SOURCE_TILE,
         )
         tile = atlas.crop(box).convert('RGB')
+
+        # Natural-looking terrain treatment. This deliberately avoids the very
+        # saturated / over-sharpened videogame look: Lanczos enlargement first,
+        # then restrained contrast, slightly calmer colours and micro-detail.
         tile = tile.resize((OUTPUT_TILE, OUTPUT_TILE), Image.Resampling.LANCZOS)
-        tile = ImageEnhance.Contrast(tile).enhance(1.04)
-        tile = tile.filter(ImageFilter.UnsharpMask(radius=1.15, percent=115, threshold=3))
+        tile = ImageEnhance.Color(tile).enhance(0.90)
+        tile = ImageEnhance.Contrast(tile).enhance(1.08)
+        tile = ImageEnhance.Brightness(tile).enhance(0.99)
+        tile = tile.filter(ImageFilter.UnsharpMask(radius=0.85, percent=145, threshold=2))
+
         target = OUTPUT_DIR / f'bank-{index + 1:03d}.webp'
-        tile.save(target, 'WEBP', quality=86, method=6)
+        tile.save(target, 'WEBP', quality=90, method=6)
 
 ATLAS_PATH.unlink(missing_ok=True)
 created = sorted(OUTPUT_DIR.glob('bank-*.webp'))
@@ -71,6 +77,6 @@ if legacy:
     raise SystemExit(f'Legacy terrain JPGs remain in build: {[p.name for p in legacy]}')
 
 print(
-    f'Prepared {len(created)} lazy-loaded Snake 2.0 backgrounds at '
+    f'Prepared {len(created)} natural-look lazy-loaded Snake 2.0 backgrounds at '
     f'{OUTPUT_TILE}x{OUTPUT_TILE}; legacy JPG terrains removed.'
 )
