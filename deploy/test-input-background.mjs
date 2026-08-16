@@ -19,8 +19,6 @@ function sliceBetween(source, startMarker, endMarker, label) {
   return source.slice(start, end);
 }
 
-// Exercise the production direction function itself. Two perpendicular turns
-// entered inside one movement interval must be preserved in their original order.
 const directionSource = sliceBetween(
   game,
   '  const MAX_DIRECTION_QUEUE = 2;',
@@ -53,7 +51,6 @@ assert.deepEqual(
   'rapid turns were not preserved',
 );
 
-// Execute the exact queue-consumption statements used at each grid step.
 const consumeSource = sliceBetween(
   game,
   '    const queuedDirection = state.inputQueue.shift();',
@@ -68,8 +65,6 @@ directionContext.consumeDirection();
 assert.deepEqual([directionState.dir.x, directionState.dir.y], [-1, 0]);
 assert.equal(directionState.inputQueue.length, 0);
 
-// The pointer handler must commit a swipe as soon as its movement crosses the
-// threshold; waiting for pointerup was the source of the mobile delay.
 const pointerMove = game.indexOf("gameShell.addEventListener('pointermove'");
 const pointerUp = game.indexOf("gameShell.addEventListener('pointerup'");
 assert.ok(pointerMove >= 0 && pointerMove < pointerUp, 'pointermove must handle swipes before pointerup');
@@ -80,8 +75,6 @@ assert.match(
 );
 assert.match(game, /addEventListener\('keydown',[\s\S]*?e\.code[\s\S]*?capture: true/);
 
-// Exercise the production critical-asset selector. Starting the game must not
-// trigger a burst of all terrain photographs.
 const loadAssetsSource = sliceBetween(
   game,
   '  async function loadAssets() {',
@@ -125,7 +118,7 @@ assert.match(game, /scheduleGameplayBackgroundRetry/);
 assert.match(game, /assetErrors\.delete\(background\.key\)/);
 
 for (const filename of ['manifest.webmanifest', 'styles-v225.css', 'install-gate-v225.js', 'game.js']) {
-  assert.ok(index.includes(`${filename}?v=2.2.10-haptics1`), `${filename} release id is stale`);
+  assert.ok(index.includes(`${filename}?v=2.2.11-volume1`), `${filename} release id is stale`);
 }
 
 console.log(JSON.stringify({
