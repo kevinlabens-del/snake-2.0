@@ -1,5 +1,7 @@
 from pathlib import Path
 import re
+import runpy
+import subprocess
 
 GAME_PATH = Path('dist/game.js')
 INDEX_PATH = Path('dist/index.html')
@@ -15,12 +17,8 @@ def replace_once(text, old, new, label):
 
 game = GAME_PATH.read_text(encoding='utf-8')
 
-# Release marker used both for diagnostics and cache invalidation.
 game = re.sub(r"const VERSION = '[^']+';", "const VERSION = '2.2.10';", game, count=1)
 
-# Add a one-time migration marker without resetting any progression. Existing
-# users may carry vibration:false from an older release where haptics were not
-# working, so this release re-enables it once and then respects future choices.
 game = replace_once(
     game,
     "    vibration: true,\n    grid: true,",
@@ -58,9 +56,6 @@ new_vibrate = """  function vibrate(pattern = 25) {
   }"""
 game = replace_once(game, old_vibrate, new_vibrate, 'vibration runtime')
 
-# A normal apple used only 18 ms, which can be imperceptible on many phones.
-# Keep the first 35 ms pulse for compatibility, then add a short second pulse so
-# every ordinary food pickup is unmistakable without feeling like a collision.
 game = replace_once(
     game,
     "    vibrate(18);",
@@ -68,9 +63,6 @@ game = replace_once(
     'green apple haptic',
 )
 
-# Every positive special food also gets a clear two-pulse eating signature.
-# Gold keeps its stronger unique pattern; poison/scorpion retain their damage
-# pattern in the negative-life branch below.
 game = replace_once(
     game,
     "vibrate(kind === 'gold' ? [20, 20, 30] : 16);",
@@ -102,7 +94,6 @@ new_toggle = """  function bindToggle(id, key) {
   }"""
 game = replace_once(game, old_toggle, new_toggle, 'vibration settings test')
 
-# Force installed devices and browsers to receive the corrected runtime.
 game = re.sub(
     r"serviceWorker\.register\('\./sw\.js\?v=[^']+'",
     "serviceWorker.register('./sw.js?v=2.2.10-haptics1'",
@@ -145,7 +136,6 @@ sw = re.sub(
 )
 SW_PATH.write_text(sw, encoding='utf-8')
 
-# Build-time guards: deployment must fail if any haptic correction disappears.
 checks = {
     "const VERSION = '2.2.10'": game,
     'hapticsRuntimeVersion: 0': game,
@@ -165,3 +155,8 @@ checks = {
 for needle, haystack in checks.items():
     if needle not in haystack:
         raise SystemExit(f'haptics build guard missing: {needle}')
+
+# Apply the independent audio calibration after haptic changes. game.js is a
+# network-first critical runtime, so the corrected curve is fetched on launch.
+runpy.run_path('deploy/patch-audio-volume.py', run_name='__main__')
+subprocess.run(['node', 'deploy/test-audio-volume.mjs'], check=True)
