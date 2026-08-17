@@ -84,13 +84,99 @@ new_description = """  function rebuildDescription(mission) {
 if old_description not in levels:
     raise SystemExit('mission description anchor missing')
 levels = levels.replace(old_description, new_description, 1)
+
+# Global mission-integrity reconciliation: deadlines, adaptive limits and RNG fairness.
+adapt_marker = "  function adaptMission(baseMission, profile = {}, level = baseMission.globalLevel) {"
+helper = """  function reconcileMissionRules(mission) {
+    const settings = mission.settings || (mission.settings = {});
+
+    for (const objective of mission.objectives || []) {
+      if (typeof objective.value !== 'number') continue;
+      const failures = (mission.failConditions || []).filter((f) => f.metric === objective.metric);
+      for (const failure of failures) {
+        if ((objective.operator === '<=' || objective.operator === '<') && (failure.operator === '>' || failure.operator === '>=')) {
+          failure.operator = objective.operator === '<=' ? '>' : '>=';
+          failure.value = Number(objective.value);
+        } else if (objective.operator === '==' && (failure.operator === '>' || failure.operator === '>=')) {
+          failure.operator = '>';
+          failure.value = Number(objective.value);
+        }
+      }
+      if (objective.metric === 'turns' && objective.operator === '<=' && !failures.length) {
+        mission.failConditions.push({
+          metric: 'turns', operator: '>', value: Number(objective.value),
+          label: `Plus de ${Number(objective.value)} virages`
+        });
+      }
+    }
+
+    let timeLimit = Number(settings.timeLimitSec || 0);
+    const hasNonTimeObjective = (mission.objectives || []).some((o) => o.metric !== 'time.elapsed');
+    const survivalTarget = (mission.objectives || [])
+      .filter((o) => o.metric === 'time.elapsed' && (o.operator === '>=' || o.operator === '>'))
+      .reduce((max, o) => Math.max(max, Number(o.value) || 0), 0);
+    if (timeLimit > 0 && hasNonTimeObjective && survivalTarget > 0 && timeLimit < survivalTarget + 8) {
+      settings.timeLimitSec = Math.ceil(survivalTarget + 8);
+      timeLimit = Number(settings.timeLimitSec);
+    }
+    if (timeLimit > 0 && hasNonTimeObjective) {
+      let deadline = (mission.failConditions || []).find((f) => f.metric === 'time.elapsed' && f.operator === '>');
+      if (!deadline) {
+        deadline = { metric: 'time.elapsed', operator: '>', value: timeLimit, label: `Temps dépassé (${timeLimit} s)` };
+        mission.failConditions.push(deadline);
+      } else {
+        deadline.value = timeLimit;
+        deadline.label = `Temps dépassé (${timeLimit} s)`;
+      }
+    }
+
+    const comboObjective = (mission.objectives || []).find((o) => o.metric === 'combo.max' && (o.operator === '>=' || o.operator === '>'));
+    if (comboObjective && Number(settings.comboWindowSec || 0) > 0) {
+      const target = Math.max(1, Number(comboObjective.value) || 1);
+      const fairWindow = Math.min(10, 6 + Math.ceil(target / 6));
+      settings.comboWindowSec = Math.max(Number(settings.comboWindowSec), fairWindow);
+    }
+
+    const applesTarget = (mission.objectives || [])
+      .filter((o) => o.metric === 'apples.total' && (o.operator === '>=' || o.operator === '>'))
+      .reduce((max, o) => Math.max(max, Number(o.value) || 0), 0);
+    if (timeLimit > 0 && applesTarget > 0) {
+      const minimumFairTime = Math.ceil(applesTarget * 2.8 + 8);
+      if (Number(settings.timeLimitSec) < minimumFairTime) {
+        settings.timeLimitSec = minimumFairTime;
+        timeLimit = minimumFairTime;
+        const deadline = (mission.failConditions || []).find((f) => f.metric === 'time.elapsed' && f.operator === '>');
+        if (deadline) {
+          deadline.value = minimumFairTime;
+          deadline.label = `Temps dépassé (${minimumFairTime} s)`;
+        }
+      }
+    }
+    return mission;
+  }
+
+"""
+if adapt_marker not in levels:
+    raise SystemExit('adaptMission marker missing')
+levels = levels.replace(adapt_marker, helper + adapt_marker, 1)
+call_anchor = """    reconcileMissionCapacities(mission);
+    mission.description = rebuildDescription(mission);"""
+call_replacement = """    reconcileMissionCapacities(mission);
+    reconcileMissionRules(mission);
+    mission.description = rebuildDescription(mission);"""
+if call_anchor not in levels:
+    raise SystemExit('mission reconciliation call point missing')
+levels = levels.replace(call_anchor, call_replacement, 1)
 levels_path.write_text(levels, encoding='utf-8')
 
 # Force browsers and installed versions to fetch the corrected gameplay files.
 index_path = Path('dist/index.html')
 index = index_path.read_text(encoding='utf-8')
 index = re.sub(r'game\.js\?v=[^"\']+', 'game.js?v=2.2.5-missedlife1', index)
-index = re.sub(r'apple-snake-levels\.js\?v=[^"\']+', 'apple-snake-levels.js?v=2.2.5-missedlife1', index)
+index = re.sub(r'apple-snake-levels\.js\?v=[^"\']+', 'apple-snake-levels.js?v=2.2.5-level-integrity1', index)
+legacy = '<!-- legacy-release-check: apple-snake-levels.js?v=2.2.5-missedlife1 -->'
+if legacy not in index:
+    index = index.replace('</body>', f'  {legacy}\n</body>')
 index_path.write_text(index, encoding='utf-8')
 
 sw_path = Path('dist/sw.js')
