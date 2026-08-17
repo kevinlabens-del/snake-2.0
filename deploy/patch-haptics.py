@@ -164,4 +164,5 @@ subprocess.run(['node', 'deploy/test-audio-volume.mjs'], check=True)
 # Apply the relay gameplay after the core runtime patches, then validate the
 # five relay missions and their transparent PNG assets before Pages can deploy.
 runpy.run_path('deploy/patch-relay.py', run_name='__main__')
+runpy.run_path('deploy/patch-relay-nest-size.py', run_name='__main__')
 subprocess.run(['node', 'deploy/test-relay.mjs'], check=True)
