@@ -1,4 +1,6 @@
 from pathlib import Path
+import base64
+import runpy
 
 GAME_PATH = Path('dist/game.js')
 
@@ -11,14 +13,7 @@ def replace_once(text, old, new, label):
 
 game = GAME_PATH.read_text(encoding='utf-8')
 
-# Persist a one-time migration marker. Existing low-volume users keep the same
-# audible level while their slider moves to the newly useful range (6% -> 75%).
-game = replace_once(
-    game,
-    "    musicVolume: 100,\n",
-    "    musicVolume: 100,\n    audioVolumeRuntimeVersion: 0,\n",
-    'audio volume save field',
-)
+game = replace_once(game, "    musicVolume: 100,\n", "    musicVolume: 100,\n    audioVolumeRuntimeVersion: 0,\n", 'audio volume save field')
 
 migration_anchor = """  if (Number(save.hapticsRuntimeVersion || 0) < 1) {
     save.vibration = true;
@@ -49,14 +44,7 @@ sync_new = """  function effectiveMusicVolume(percent) {
     music?.setVolume(effectiveMusicVolume(musicVolume));
 """
 game = replace_once(game, sync_old, sync_new, 'audio synchronization curve')
-
-game = replace_once(
-    game,
-    "    music?.setVolume(save.musicVolume / 100);\n    persist();",
-    "    music?.setVolume(effectiveMusicVolume(save.musicVolume));\n    persist();",
-    'live volume slider curve',
-)
-
+game = replace_once(game, "    music?.setVolume(save.musicVolume / 100);\n    persist();", "    music?.setVolume(effectiveMusicVolume(save.musicVolume));\n    persist();", 'live volume slider curve')
 GAME_PATH.write_text(game, encoding='utf-8')
 
 checks = {
@@ -69,5 +57,15 @@ checks = {
     'music?.setVolume(effectiveMusicVolume(save.musicVolume))': game,
 }
 for needle, haystack in checks.items():
-    if needle not in haystack:
-        raise SystemExit(f'audio volume build guard missing: {needle}')
+    if needle not in haystack: raise SystemExit(f'audio volume build guard missing: {needle}')
+
+# Relay assets are stored losslessly as base64 text because repository writes are UTF-8.
+relay_dir = Path('dist/assets/relay')
+relay_dir.mkdir(parents=True, exist_ok=True)
+for source, target in [('deploy/relay-squirrel.png.b64','squirrel.png'), ('deploy/relay-nest.png.b64','nest.png')]:
+    payload = ''.join(Path(source).read_text(encoding='utf-8').split())
+    data = base64.b64decode(payload, validate=True)
+    if not data.startswith(b'\x89PNG\r\n\x1a\n'): raise SystemExit(f'invalid PNG payload: {source}')
+    (relay_dir / target).write_bytes(data)
+
+runpy.run_path('deploy/patch-relay.py', run_name='__main__')
