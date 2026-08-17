@@ -121,6 +121,8 @@ for (const filename of ['manifest.webmanifest', 'styles-v225.css', 'install-gate
   assert.ok(index.includes(`${filename}?v=2.2.10-haptics1`), `${filename} release id is stale`);
 }
 
+await import('./test-levels-1-600.mjs');
+
 console.log(JSON.stringify({
   passed: true,
   rapidTurns: 2,
