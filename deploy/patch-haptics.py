@@ -160,3 +160,8 @@ for needle, haystack in checks.items():
 # network-first critical runtime, so the corrected curve is fetched on launch.
 runpy.run_path('deploy/patch-audio-volume.py', run_name='__main__')
 subprocess.run(['node', 'deploy/test-audio-volume.mjs'], check=True)
+
+# Apply the relay gameplay after the core runtime patches, then validate the
+# five relay missions and their transparent PNG assets before Pages can deploy.
+runpy.run_path('deploy/patch-relay.py', run_name='__main__')
+subprocess.run(['node', 'deploy/test-relay.mjs'], check=True)
