@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const Levels = require('../dist/apple-snake-levels.js');
+const game = fs.readFileSync('./dist/game.js', 'utf8');
+
+const expectedTargets = [1,2,3,4,5];
+const expectedObstacles = [0,2,4,6,8];
+for (let i = 0; i < 5; i++) {
+  const level = 71 + i;
+  const mission = Levels.getMission(level, {}, { adaptive:false, seed:level });
+  assert.equal(mission.missionType, 'intervals', `L${level}: not a relay mission`);
+  assert.equal(Number(mission.settings.intervalCount), expectedTargets[i], `L${level}: wrong relay target`);
+  assert.equal(mission.settings.intervalTimeSec, undefined, `L${level}: legacy relay timer still active`);
+  assert.equal(mission.settings.intervalTarget, undefined, `L${level}: legacy apple relay target still active`);
+  assert.equal(Number(mission.settings.obstacles || 0), expectedObstacles[i], `L${level}: wrong obstacle progression`);
+  const objective = mission.objectives.find(o => o.metric === 'intervals.completed');
+  assert.ok(objective, `L${level}: relay objective missing`);
+  assert.equal(Number(objective.value), expectedTargets[i], `L${level}: objective target mismatch`);
+}
+
+for (const needle of [
+  'function relayMissionActive()',
+  'function relayTarget()',
+  'relayNestCells(nest = state.relayNest)',
+  'const x=state.relayNest.x*cell, y=state.relayNest.y*cell, size=cell*2',
+  'drawRelayNestSquirrels(x,y,state.relayCompleted,Boolean(state.relayPendingCompleteAt))',
+  'if (relayMissionActive()) { state.greenFood = null; return; }',
+  'if (relayMissionActive()) { state.specialFood = null; return; }',
+  'state.relayCompleted+=1;',
+  "levelEngine?.record('intervalComplete')",
+  'buildMissionObstacles();',
+  'spawnRelayRound();'
+]) assert.ok(game.includes(needle), `game.js missing relay guard: ${needle}`);
+
+for (const asset of ['./dist/assets/relay/squirrel.png','./dist/assets/relay/nest.png']) {
+  const data = fs.readFileSync(asset);
+  assert.equal(data.subarray(0,8).toString('hex'), '89504e470d0a1a0a', `${asset}: invalid PNG`);
+}
+
+console.log(JSON.stringify({passed:true, relayLevels:'71-75', targets:expectedTargets, obstacles:expectedObstacles, nest:'2x2', apples:false, persistentSquirrels:true}));
