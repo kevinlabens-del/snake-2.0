@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+
+// Apply the weighted-apple gameplay patch before loading the level engine.
+execFileSync('python3', ['deploy/patch-weighted-apples.py'], { stdio: 'inherit' });
+
 const require = createRequire(import.meta.url);
 const Levels = require('../dist/apple-snake-levels.js');
 
@@ -14,6 +19,27 @@ let assertions = 0;
 const nested = (o,p) => p.split('.').reduce((a,k)=>a?.[k],o);
 const satisfy = o => o.operator==='>' && typeof o.value==='number' ? o.value+1 : o.operator==='<' && typeof o.value==='number' ? o.value-1 : o.value;
 const violate = f => f.operator==='>' ? (typeof f.value==='number'?f.value+1:true) : f.operator==='>=' ? f.value : f.operator==='<' ? (typeof f.value==='number'?f.value-1:false) : f.operator==='<=' ? f.value : f.value;
+
+// Weighted apples: total progression changes, score and physical-item metrics do not.
+{
+  const e = Levels.createEngine({ profile: profiles[2] });
+  e.startLevel(1, profiles[2], { adaptive:true, seed:1 });
+  e.record('apple', { kind:'red', points:25, length:4, corner:true });
+  let metrics = e.snapshot().metrics;
+  assert.equal(Number(nested(metrics,'apples.total')), 2); assertions++;
+  assert.equal(Number(nested(metrics,'apples.red')), 1); assertions++;
+  assert.equal(Number(nested(metrics,'apples.corner')), 2); assertions++;
+  assert.equal(Number(nested(metrics,'score.total')), 25); assertions++;
+  assert.equal(Number(nested(metrics,'combo.max')), 1); assertions++;
+  e.record('apple', { kind:'gold', points:75, length:5, inActiveZone:true });
+  metrics = e.snapshot().metrics;
+  assert.equal(Number(nested(metrics,'apples.total')), 5); assertions++;
+  assert.equal(Number(nested(metrics,'apples.gold')), 1); assertions++;
+  assert.equal(Number(nested(metrics,'apples.inActiveZone')), 3); assertions++;
+  assert.equal(Number(nested(metrics,'apples.specialTotal')), 2); assertions++;
+  assert.equal(Number(nested(metrics,'score.total')), 100); assertions++;
+  assert.equal(Number(nested(metrics,'combo.max')), 2); assertions++;
+}
 
 for (const profile of profiles) {
   for (let level=1; level<=600; level++) {
@@ -86,4 +112,4 @@ for (let level=601; level<=2000; level++) {
   if(t&&nonTime){const f=m.failConditions.find(f=>f.metric==='time.elapsed'&&f.operator==='>'); assert.ok(f&&Number(f.value)===t,`L${level}: endless deadline mismatch`); assertions++;}
 }
 
-console.log(JSON.stringify({passed:true, levels:'1-600', profiles:profiles.length, endlessSmoke:'601-2000', assertions}));
+console.log(JSON.stringify({passed:true, levels:'1-600', profiles:profiles.length, endlessSmoke:'601-2000', weightedApples:{red:2,gold:3}, assertions}));
