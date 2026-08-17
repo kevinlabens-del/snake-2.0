@@ -6,28 +6,41 @@ if not GAME.exists():
     raise SystemExit('dist/game.js missing')
 
 text = GAME.read_text(encoding='utf-8')
-old = "if (assets.relayNest) drawImageContain(assets.relayNest,x,y,size,size);"
-new = "if (assets.relayNest) ctx.drawImage(assets.relayNest,1,3,30,23,x,y,size,size);"
+old_contain = "if (assets.relayNest) drawImageContain(assets.relayNest,x,y,size,size);"
+old_crop = "if (assets.relayNest) ctx.drawImage(assets.relayNest,1,3,30,23,x,y,size,size);"
+# The PNG contains faint anti-aliased pixels around the actual nest. Cropping
+# to the clearly visible artwork (alpha > 8 bbox) makes the nest itself, not
+# merely its transparent image box, occupy the full 2x2 gameplay footprint.
+new = "if (assets.relayNest) ctx.drawImage(assets.relayNest,3,5,26,19,x,y,size,size);"
 
 if new not in text:
-    if old not in text:
+    if old_crop in text:
+        text = text.replace(old_crop, new, 1)
+    elif old_contain in text:
+        text = text.replace(old_contain, new, 1)
+    else:
         raise SystemExit('relay nest draw anchor missing')
-    text = text.replace(old, new, 1)
 
-# The nest collision zone remains exactly 2x2 cells; this patch only ensures
-# the visible PNG artwork fills that same 2x2 footprint instead of being
-# reduced by aspect-ratio fitting and transparent margins.
+# Collision and visual footprint must both remain exactly 2x2 cells.
 required = [
     'const x=state.relayNest.x*cell, y=state.relayNest.y*cell, size=cell*2',
-    'ctx.drawImage(assets.relayNest,1,3,30,23,x,y,size,size)',
+    'ctx.drawImage(assets.relayNest,3,5,26,19,x,y,size,size)',
     'relayNestCells(nest = state.relayNest)',
+    '{x:nest.x,y:nest.y}',
+    '{x:nest.x+1,y:nest.y}',
+    '{x:nest.x,y:nest.y+1}',
+    '{x:nest.x+1,y:nest.y+1}',
 ]
 for needle in required:
     if needle not in text:
         raise SystemExit(f'relay nest 2x2 guard missing: {needle}')
 
-if 'drawImageContain(assets.relayNest,x,y,size,size)' in text:
-    raise SystemExit('old contained relay nest rendering is still active')
+for forbidden in [
+    'drawImageContain(assets.relayNest,x,y,size,size)',
+    'ctx.drawImage(assets.relayNest,1,3,30,23,x,y,size,size)',
+]:
+    if forbidden in text:
+        raise SystemExit(f'old undersized relay nest rendering is still active: {forbidden}')
 
 GAME.write_text(text, encoding='utf-8')
-print('Relay nest visual now fills the exact 2x2-cell gameplay footprint')
+print('Relay nest visible artwork now fills the exact 2x2-cell gameplay footprint')
