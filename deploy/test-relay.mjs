@@ -6,6 +6,8 @@ import { createRequire } from 'node:module';
 // Apply the relay-specific playability correction after the main relay patch.
 // This mutates the rebuilt dist/ files that are subsequently uploaded to Pages.
 execFileSync('python3', ['deploy/patch-relay-playability.py'], { stdio: 'inherit' });
+// Verify the artwork itself—not only the collision box—fills exactly 2x2 cells.
+execFileSync('python3', ['deploy/test-relay-visual.py'], { stdio: 'inherit' });
 
 const require = createRequire(import.meta.url);
 const Levels = require('../dist/apple-snake-levels.js');
@@ -32,6 +34,7 @@ for (const needle of [
   'function relayTarget()',
   'relayNestCells(nest = state.relayNest)',
   'const x=state.relayNest.x*cell, y=state.relayNest.y*cell, size=cell*2',
+  'ctx.drawImage(assets.relayNest,3,5,26,19,x,y,size,size)',
   'drawRelayNestSquirrels(x,y,state.relayCompleted,Boolean(state.relayPendingCompleteAt))',
   'if (relayMissionActive()) { state.greenFood = null; return; }',
   'if (relayMissionActive()) { state.specialFood = null; return; }',
@@ -51,4 +54,4 @@ for (const asset of ['./dist/assets/relay/squirrel.png','./dist/assets/relay/nes
   assert.equal(data.subarray(0,8).toString('hex'), '89504e470d0a1a0a', `${asset}: invalid PNG`);
 }
 
-console.log(JSON.stringify({passed:true, relayLevels:'71-75', targets:expectedTargets, obstacles:expectedObstacles, maxObstacles:4, duplicateObstacleBuild:false, nest:'2x2', apples:false, persistentSquirrels:true}));
+console.log(JSON.stringify({passed:true, relayLevels:'71-75', targets:expectedTargets, obstacles:expectedObstacles, maxObstacles:4, duplicateObstacleBuild:false, nestVisible:'2x2-exact', apples:false, persistentSquirrels:true}));
