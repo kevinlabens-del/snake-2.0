@@ -190,3 +190,6 @@ subprocess.run(['node', 'deploy/test-audio-volume.mjs'], check=True)
 runpy.run_path('deploy/patch-relay.py', run_name='__main__')
 runpy.run_path('deploy/patch-relay-nest-size.py', run_name='__main__')
 subprocess.run(['node', 'deploy/test-relay.mjs'], check=True)
+
+# Inject search-engine metadata into the final Pages artifact, not merely the repository root.
+runpy.run_path('deploy/patch-seo.py', run_name='__main__')
