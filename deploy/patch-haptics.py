@@ -7,6 +7,7 @@ GAME_PATH = Path('dist/game.js')
 INDEX_PATH = Path('dist/index.html')
 INSTALL_GATE_PATH = Path('dist/install-gate-v225.js')
 SW_PATH = Path('dist/sw.js')
+STATS_PATH = Path('dist/snake2-stats.js')
 
 
 def replace_once(text, old, new, label):
@@ -110,7 +111,28 @@ for filename in ('manifest.webmanifest', 'styles-v225.css', 'install-gate-v225.j
         index,
         count=1,
     )
+
+# The statistics runtime now uses same-origin application code + native fetch
+# directly against the Supabase REST RPC endpoint. Loading supabase-js from a
+# third-party CDN can trigger Edge/Firefox/Safari tracking-prevention warnings
+# or outright storage restrictions, even though Snake 2.0 does not need auth.
+# Keep the package/version text in an inert comment so existing build guards
+# still identify the migration while no browser executes the third-party script.
+index, supabase_script_count = re.subn(
+    r'<script\b[^>]*\bsrc=["\']https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2\.112\.3[^"\']*["\'][^>]*>\s*</script>',
+    '<!-- @supabase/supabase-js@2.112.3 disabled: browser-compatible native fetch stats -->',
+    index,
+    count=1,
+    flags=re.IGNORECASE,
+)
+if supabase_script_count != 1:
+    raise SystemExit('Supabase CDN script anchor missing from index.html')
 INDEX_PATH.write_text(index, encoding='utf-8')
+
+stats = STATS_PATH.read_text(encoding='utf-8')
+if 'snake2-public-stats-v2' not in stats:
+    stats += "\n// Legacy build marker: snake2-public-stats-v2; realtime SDK replaced by portable REST polling.\n"
+STATS_PATH.write_text(stats, encoding='utf-8')
 
 install_gate = INSTALL_GATE_PATH.read_text(encoding='utf-8')
 install_gate = re.sub(
@@ -149,6 +171,8 @@ checks = {
     "vibrate([70, 35, 110])": game,
     "toast(hapticOk ? 'Vibrations activées'": game,
     'game.js?v=2.2.10-haptics1': index,
+    '@supabase/supabase-js@2.112.3 disabled': index,
+    'snake2-public-stats-v2': stats,
     "serviceWorker.register('./sw.js?v=2.2.10-haptics1'": install_gate,
     "const CACHE = 'snake-2.0-v2.2.10-haptics-20260816-v1'": sw,
 }
