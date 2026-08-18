@@ -9,6 +9,7 @@
   const PENDING_KEY = 'snake2_pending_completions_v2';
   const HEARTBEAT_MS = 15000;
   const RETRY_MS = 30000;
+  const STATS_POLL_MS = 15000;
   const MAX_PENDING = 100;
 
   const uuid = () => globalThis.crypto?.randomUUID
@@ -19,7 +20,23 @@
         return value.toString(16);
       });
 
+  function safeStore(session = false) {
+    try {
+      const store = session ? window.sessionStorage : window.localStorage;
+      const probe = '__snake2_storage_probe__';
+      store.setItem(probe, '1');
+      store.removeItem(probe);
+      return store;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  const localStore = safeStore(false);
+  const sessionStore = safeStore(true);
+
   function readJson(store, key, fallback) {
+    if (!store) return fallback;
     try {
       const raw = store.getItem(key);
       return raw ? JSON.parse(raw) : fallback;
@@ -29,14 +46,15 @@
   }
 
   function writeJson(store, key, value) {
+    if (!store) return;
     try {
       if (value === null) store.removeItem(key);
       else store.setItem(key, JSON.stringify(value));
     } catch (_) {}
   }
 
-  function getStoredId(key, session = false) {
-    const store = session ? sessionStorage : localStorage;
+  function getStoredId(key, store) {
+    if (!store) return uuid();
     try {
       let id = store.getItem(key);
       if (!id) {
@@ -49,14 +67,13 @@
     }
   }
 
-  const visitorId = getStoredId(VISITOR_KEY);
-  const sessionId = getStoredId(SESSION_KEY, true);
-  let activeRun = readJson(sessionStorage, ACTIVE_RUN_KEY, null);
+  const visitorId = getStoredId(VISITOR_KEY, localStore);
+  const sessionId = getStoredId(SESSION_KEY, sessionStore);
+  let activeRun = readJson(sessionStore, ACTIVE_RUN_KEY, null);
   let playing = false;
-  let realtimeClient = null;
-  let realtimeChannel = null;
   let flushBusy = false;
   let presenceChain = Promise.resolve();
+  let pollBusy = false;
 
   async function rpc(name, body = {}, keepalive = false) {
     const controller = !keepalive && globalThis.AbortController ? new AbortController() : null;
@@ -64,10 +81,17 @@
     try {
       const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
         method: 'POST',
-        headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
         body: JSON.stringify(body),
         cache: 'no-store',
-        keepalive,
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        keepalive: Boolean(keepalive),
         ...(controller ? { signal: controller.signal } : {})
       });
       if (!response.ok) throw new Error(`${name}: ${response.status}`);
@@ -143,12 +167,12 @@
   }
 
   function loadPending() {
-    const value = readJson(localStorage, PENDING_KEY, []);
+    const value = readJson(localStore, PENDING_KEY, []);
     return Array.isArray(value) ? value.slice(-MAX_PENDING) : [];
   }
 
   function savePending(queue) {
-    writeJson(localStorage, PENDING_KEY, queue.length ? queue.slice(-MAX_PENDING) : null);
+    writeJson(localStore, PENDING_KEY, queue.length ? queue.slice(-MAX_PENDING) : null);
   }
 
   function enqueueCompletion(run) {
@@ -229,10 +253,22 @@
     return keepalive ? task() : queuePresence(task);
   }
 
+  async function pollStats() {
+    if (pollBusy || document.visibilityState === 'hidden' || !navigator.onLine) return;
+    pollBusy = true;
+    try {
+      render(await rpc('snake2_get_stats'));
+    } catch (error) {
+      console.debug('[Snake2 stats poll]', error?.message || error);
+    } finally {
+      pollBusy = false;
+    }
+  }
+
   function trackLevelStart(details = {}) {
     const run = createRun(details.level, details.daily);
     activeRun = run;
-    writeJson(sessionStorage, ACTIVE_RUN_KEY, run);
+    writeJson(sessionStore, ACTIVE_RUN_KEY, run);
     playing = true;
 
     queuePresence(async () => {
@@ -260,73 +296,48 @@
     const run = activeRun;
     enqueueCompletion(run);
     activeRun = null;
-    writeJson(sessionStorage, ACTIVE_RUN_KEY, null);
+    writeJson(sessionStore, ACTIVE_RUN_KEY, null);
     playing = false;
     void flushPending();
     void leavePresence();
+    void pollStats();
   }
 
   function trackLevelEnd() {
     activeRun = null;
-    writeJson(sessionStorage, ACTIVE_RUN_KEY, null);
+    writeJson(sessionStore, ACTIVE_RUN_KEY, null);
     playing = false;
     void leavePresence();
+    void pollStats();
   }
 
   window.snake2TrackLevelStart = trackLevelStart;
   window.snake2TrackLevelComplete = trackLevelComplete;
   window.snake2TrackLevelEnd = trackLevelEnd;
 
-  function startRealtime() {
-    if (realtimeChannel || !window.supabase?.createClient) return;
-    if (!realtimeClient) {
-      realtimeClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-      });
-    }
-    realtimeChannel = realtimeClient.channel('snake2-public-stats-v2')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'snake2_stats',
-        filter: 'id=eq.1'
-      }, payload => render(payload.new || {}))
-      .subscribe(status => {
-        if (status === 'SUBSCRIBED' && playing) void heartbeat();
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') realtimeChannel = null;
-      });
-  }
-
-  function stopRealtime() {
-    if (!realtimeChannel) return;
-    try { realtimeClient?.removeChannel(realtimeChannel); } catch (_) {}
-    realtimeChannel = null;
-  }
-
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      startRealtime();
       if (playing) void heartbeat();
       void flushPending();
+      void pollStats();
     } else if (playing) {
       void leavePresence();
     }
   });
 
   window.addEventListener('online', () => {
-    startRealtime();
     if (playing) void heartbeat();
     void flushPending();
+    void pollStats();
   });
   window.addEventListener('offline', () => setAvailability(false));
   window.addEventListener('pagehide', () => {
     if (playing) void leavePresence(true);
-    stopRealtime();
   });
   window.addEventListener('pageshow', () => {
-    startRealtime();
     if (playing) void heartbeat();
     void flushPending();
+    void pollStats();
   });
 
   async function boot() {
@@ -337,13 +348,11 @@
       setAvailability(false);
       console.debug('[Snake2 stats visitor]', error?.message || error);
     }
-    startRealtime();
     await flushPending();
+    void pollStats();
     setInterval(() => { if (playing) void heartbeat(); }, HEARTBEAT_MS);
-    setInterval(() => {
-      if (!realtimeChannel) startRealtime();
-      void flushPending();
-    }, RETRY_MS);
+    setInterval(() => { void flushPending(); }, RETRY_MS);
+    setInterval(() => { void pollStats(); }, STATS_POLL_MS);
   }
 
   if (document.readyState === 'loading') {
