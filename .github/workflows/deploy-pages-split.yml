@@ -53,6 +53,16 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
+          path = Path('dist/index.html')
+          html = path.read_text(encoding='utf-8')
+          tracker = '<script async src="https://kevinlabens-del.github.io/CR3-TIX-ANALYTIX./analytics.js" data-project-id="a0283201-3521-44ea-b1ff-3de1e311ec3b" data-project-key="afd1eaaa-1f61-4f94-aee6-d1f79222a231"></script>'
+          if 'data-project-id="a0283201-3521-44ea-b1ff-3de1e311ec3b"' not in html:
+              html = html.replace('</head>', tracker + '</head>', 1)
+          path.write_text(html, encoding='utf-8')
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
           import re
           path = Path('dist/install-gate-v225.js')
           text = path.read_text(encoding='utf-8')
@@ -205,6 +215,7 @@ jobs:
           grep -q 'networkFirstCritical' dist/sw.js
           grep -q 'isCriticalRuntime' dist/sw.js
           grep -q 'manifest.webmanifest' dist/index.html
+          grep -q 'data-project-id="a0283201-3521-44ea-b1ff-3de1e311ec3b"' dist/index.html
 
           node --check dist/install-gate-v225.js
           node --check dist/sw.js
