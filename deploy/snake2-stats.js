@@ -370,7 +370,9 @@
   const script = document.createElement('script');
   script.async = true;
   script.src = 'https://kevinlabens-del.github.io/CR3-TIX-ANALYTIX./analytics.js';
-  script.dataset.projectId = 'a0283201-3521-44ea-b1ff-3de1e311ec3b';
-  script.dataset.projectKey = 'afd1eaaa-1f61-4f94-aee6-d1f79222a231';
+  if (typeof script.setAttribute === 'function') {
+    script.setAttribute('data-project-id', 'a0283201-3521-44ea-b1ff-3de1e311ec3b');
+    script.setAttribute('data-project-key', 'afd1eaaa-1f61-4f94-aee6-d1f79222a231');
+  }
   document.head.appendChild(script);
 })();
