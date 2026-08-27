@@ -1,0 +1,34 @@
+name: Install CR3@TIX ANALYTIX tracker
+on:
+  push:
+    paths:
+      - '.github/workflows/install-analytix-tracker.yml'
+permissions:
+  contents: write
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject tracker
+        shell: python
+        run: |
+          from pathlib import Path
+          snippet='''\n  <!-- CR3@TIX ANALYTIX -->\n  <script async src="https://kevinlabens-del.github.io/CR3-TIX-ANALYTIX./analytics.js" data-project-id="a0283201-3521-44ea-b1ff-3de1e311ec3b" data-project-key="afd1eaaa-1f61-4f94-aee6-d1f79222a231"></script>\n'''
+          for name in ('index.html','app.html'):
+              p=Path(name)
+              if not p.exists(): continue
+              text=p.read_text(encoding='utf-8')
+              if 'data-project-id="a0283201-3521-44ea-b1ff-3de1e311ec3b"' in text: continue
+              marker='</head>' if '</head>' in text else '</body>'
+              if marker in text:
+                  text=text.replace(marker,snippet+marker,1)
+                  p.write_text(text,encoding='utf-8')
+          Path('.github/workflows/install-analytix-tracker.yml').unlink(missing_ok=True)
+      - name: Commit tracker
+        run: |
+          git config user.name "CR3ATIX Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "feat: enable CR3@TIX ANALYTIX tracking"
+          git push
