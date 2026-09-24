@@ -254,6 +254,32 @@ jobs:
           grep -q 'const HEARTBEAT_MS = 15000' dist/snake2-stats.js
           touch dist/.nojekyll
 
+      - name: Inspect share integration anchors
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("dist/index.html").read_text(encoding="utf-8")
+          print("=== SHARE UI ANCHORS ===")
+          print("title:", re.findall(r"<title[^>]*>(.*?)</title>", html, re.I|re.S)[:1])
+          for tag in re.findall(r"<button\b[^>]*>.*?</button>", html, re.I|re.S):
+              txt = re.sub(r"<[^>]+>", " ", tag)
+              txt = " ".join(txt.split())
+              attrs = tag.split(">",1)[0] + ">"
+              print("BUTTON:", attrs[:280], "::", txt[:180])
+          for keyword in ("param", "régl", "option", "menu", "install", "à propos"):
+              print(f"=== {keyword.upper()} ===")
+              for m in list(re.finditer(keyword, html, re.I))[:8]:
+                  snippet = re.sub(r"\s+", " ", html[max(0,m.start()-350):m.start()+900])
+                  print(snippet)
+          print("=== HEAD META ===")
+          head = html.split("</head>",1)[0]
+          for line in head.splitlines():
+              if any(k in line.lower() for k in ("<title", "description", "og:", "twitter:", "manifest", "icon")):
+                  print(line.strip())
+          PY
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
