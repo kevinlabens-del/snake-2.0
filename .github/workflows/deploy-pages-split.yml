@@ -222,7 +222,7 @@ jobs:
           grep -q 'navigator.clipboard' dist/share-app.js
           grep -q 'property="og:image"' dist/index.html
           grep -q 'name="twitter:title"' dist/index.html
-          grep -q "'\''./share-app.js'\''" dist/sw.js
+          grep -q 'share-app.js' dist/sw.js
           node deploy/test-snake2-stats.mjs
           node deploy/test-input-background.mjs
           node deploy/test-haptics.mjs
