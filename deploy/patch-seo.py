@@ -6,6 +6,7 @@ ROBOTS = Path('dist/robots.txt')
 SITEMAP = Path('dist/sitemap.xml')
 
 BASE = 'https://kevinlabens-del.github.io/snake-2.0/'
+OG_IMAGE = BASE + 'assets/snake-2-splash-v217.png'
 TITLE = 'Snake 2.0 — Jeu Snake gratuit en ligne | 600+ niveaux'
 DESCRIPTION = ('Jouez gratuitement à Snake 2.0 : un jeu Snake moderne avec plus de 600 niveaux, '
                'missions, obstacles, portails et progression infinie sur mobile et ordinateur.')
@@ -33,7 +34,12 @@ seo_block = f'''\n  <!-- SEO Snake 2.0 -->
   <meta property="og:title" content="{TITLE}">
   <meta property="og:description" content="{DESCRIPTION}">
   <meta property="og:url" content="{BASE}">
+  <meta property="og:image" content="{OG_IMAGE}">
+  <meta property="og:image:alt" content="Snake 2.0 — jeu arcade CR3@TIX">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{TITLE}">
+  <meta name="twitter:description" content="{DESCRIPTION}">
+  <meta name="twitter:image" content="{OG_IMAGE}">
   <script type="application/ld+json">
   {{
     "@context": "https://schema.org",
@@ -69,7 +75,9 @@ SITEMAP.write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 # Build guards
 final = INDEX.read_text(encoding='utf-8')
 for needle in (TITLE, 'name="robots" content="index,follow,max-image-preview:large"',
-               f'rel="canonical" href="{BASE}"', '"@type": "VideoGame"'):
+               f'rel="canonical" href="{BASE}"', f'property="og:image" content="{OG_IMAGE}"',
+               'name="twitter:title"', 'name="twitter:description"', 'name="twitter:image"',
+               '"@type": "VideoGame"'):
     if needle not in final:
         raise SystemExit(f'SEO build guard missing: {needle}')
 if not ROBOTS.exists() or not SITEMAP.exists():
