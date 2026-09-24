@@ -50,6 +50,9 @@ jobs:
           python3 deploy/patch-responsive-layout.py
           python3 deploy/patch-input-background.py
           python3 deploy/patch-haptics.py
+          cp deploy/share-app.js dist/share-app.js
+          python3 deploy/patch-seo.py
+          python3 deploy/patch-share.py
 
           python3 - <<'PY'
           from pathlib import Path
@@ -211,6 +214,15 @@ jobs:
           node --check dist/game.js
           node --check dist/apple-snake-levels.js
           node --check dist/snake2-stats.js
+          node --check dist/share-app.js
+          grep -q 'id="shareAppBtn"' dist/index.html
+          grep -q 'share-app.js?v=20260924-share1' dist/index.html
+          grep -q 'https://kevinlabens-del.github.io/snake-2.0/' dist/share-app.js
+          grep -q 'navigator.share' dist/share-app.js
+          grep -q 'navigator.clipboard' dist/share-app.js
+          grep -q 'property="og:image"' dist/index.html
+          grep -q 'name="twitter:title"' dist/index.html
+          grep -q "'\''./share-app.js'\''" dist/sw.js
           node deploy/test-snake2-stats.mjs
           node deploy/test-input-background.mjs
           node deploy/test-haptics.mjs
@@ -253,32 +265,6 @@ jobs:
           grep -q 'snake2_pending_completions_v2' dist/snake2-stats.js
           grep -q 'const HEARTBEAT_MS = 15000' dist/snake2-stats.js
           touch dist/.nojekyll
-
-      - name: Inspect share integration anchors
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          html = Path("dist/index.html").read_text(encoding="utf-8")
-          print("=== SHARE UI ANCHORS ===")
-          print("title:", re.findall(r"<title[^>]*>(.*?)</title>", html, re.I|re.S)[:1])
-          for tag in re.findall(r"<button\b[^>]*>.*?</button>", html, re.I|re.S):
-              txt = re.sub(r"<[^>]+>", " ", tag)
-              txt = " ".join(txt.split())
-              attrs = tag.split(">",1)[0] + ">"
-              print("BUTTON:", attrs[:280], "::", txt[:180])
-          for keyword in ("param", "régl", "option", "menu", "install", "à propos"):
-              print(f"=== {keyword.upper()} ===")
-              for m in list(re.finditer(keyword, html, re.I))[:8]:
-                  snippet = re.sub(r"\s+", " ", html[max(0,m.start()-350):m.start()+900])
-                  print(snippet)
-          print("=== HEAD META ===")
-          head = html.split("</head>",1)[0]
-          for line in head.splitlines():
-              if any(k in line.lower() for k in ("<title", "description", "og:", "twitter:", "manifest", "icon")):
-                  print(line.strip())
-          PY
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
